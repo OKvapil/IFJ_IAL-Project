@@ -61,3 +61,30 @@ typedef enum {
     TOKEN_DOT,              // '.' (used in import prologue 'import ifj26.*')
     
 } TokenType;
+
+/**
+ * @brief Semantic value held by a token depending on its type.
+ */
+typedef union {
+    int64_t int_val;        // For TOKEN_INT_LIT (64-bit signed integer)
+    double float_val;       // For TOKEN_FLOAT_LIT (64-bit IEEE 754 floating-point)
+    char *str_val;          // For TOKEN_IDENTIFIER and TOKEN_STRING_LIT (heap-allocated string)
+} TokenAttribute;
+
+/**
+ * @brief Complete token structure passed from scanner to parser.
+ */
+typedef struct {
+    TokenType type;         // Token category from the enum above
+    TokenAttribute attr;    // Semantic value (if required by the token type)
+    size_t line;            // Source line number for syntax/semantic error reporting
+} Token;
+
+/**
+ * @brief Deallocates dynamically allocated memory inside token attribute (e.g. str_val).
+ * 
+ * @param tok Pointer to the token to clean up.
+ */
+void token_clear(Token *tok);
+
+#endif // TOKEN_H
