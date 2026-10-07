@@ -1,0 +1,10 @@
+# IDE files
+.idea/
+*.iml
+
+# CLion build folders
+cmake-build-*/
+
+# Compiled output
+*.o
+*.out
