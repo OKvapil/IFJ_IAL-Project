@@ -69,3 +69,28 @@ Entry *ht_add(HashTable *hash_table, const char *key, void *data) {
 
   return new_entry;
 }
+
+void ht_dispose(HashTable *hash_table, void (*free_data)(void *)) {
+  if (hash_table == NULL) {
+    return;
+  }
+
+  for (int i = 0; i < HT_BUCKETS; i++) {
+    Entry *entry = hash_table->array[i];
+
+    while (entry != NULL) {
+      Entry *next_entry = entry->next;
+
+      if (free_data != NULL && entry->data != NULL) {
+        free_data(entry->data);
+      }
+
+      free(entry->identifier);
+      free(entry);
+
+      entry = next_entry;
+    }
+  }
+
+  free(hash_table);
+}
