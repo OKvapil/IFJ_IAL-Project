@@ -43,3 +43,29 @@ Entry *ht_find(HashTable *hash_table, const char *key) {
 
   return NULL;
 }
+
+Entry *ht_add(HashTable *hash_table, const char *key, void *data) {
+  unsigned long bucket_idx = hash(key) % HT_BUCKETS;
+
+  if (ht_find(hash_table, key) != NULL) {
+    return NULL;
+  }
+
+  Entry *new_entry = malloc(sizeof(Entry));
+  if (new_entry == NULL) {
+    return NULL;
+  }
+
+  new_entry->identifier = malloc(strlen(key) + 1);
+  if (new_entry->identifier == NULL) {
+    free(new_entry);
+    return NULL;
+  }
+  strcpy(new_entry->identifier, key);
+  new_entry->data = data;
+
+  new_entry->next = hash_table->array[bucket_idx];
+  hash_table->array[bucket_idx] = new_entry;
+
+  return new_entry;
+}
