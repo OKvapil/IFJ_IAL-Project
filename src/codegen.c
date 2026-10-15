@@ -29,6 +29,11 @@ void codegen_return(void) { printf("RETURN\n"); }
 
 void codegen_call(const char *label) { printf("CALL %s\n", label); }
 // ---------- Section 7.4.2 from spec
+void codegen_pushs(const char *source) { printf("PUSHS %s\n", source); }
+
+void codegen_pops(const char *result) { printf("POPS %s\n", result); }
+
+void codegen_clears(void) { printf("CLEARS\n"); }
 
 // ---------- Section 7.4.3 from spec
 void codegen_add(const char *result, const char *source1, const char *source2) {

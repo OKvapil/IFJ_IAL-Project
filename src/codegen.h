@@ -10,6 +10,8 @@
 #ifndef IFJ_IAL_PROJECT_CODEGEN_H
 #define IFJ_IAL_PROJECT_CODEGEN_H
 
+// TODO: Stack variants of instructions
+
 /**
  * @brief Prints required "IFJcode26" header line
  */
@@ -78,7 +80,30 @@ void codegen_return(void);
 void codegen_call(const char *label);
 
 // ---------- Section 7.4.2 from spec
+/**
+ * @brief Prints PUSHS (pushes value onto stack)
+ *
+ * @param source Value to push
+ *
+ * @note Pouziti nedefinovane promenne (error 54)
+ * @note Cteni neinicializovane promenne (error 56)
+ */
+void codegen_pushs(const char *source);
 
+/**
+ * @brief Prints POPS (pops value from stack)
+ *
+ * @param result Variable that recieves popped value
+ *
+ * @note Pouziti nedefinovane promenne (error 54)
+ * @note Pri prazdnem zasobniku (error 56)
+ */
+void codegen_pops(const char *result);
+
+/**
+ * @brief Prints CLEARS (clears the whole stack)
+ */
+void codegen_clears(void);
 // ---------- Section 7.4.3 from spec
 
 /**
