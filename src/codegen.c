@@ -93,6 +93,14 @@ void codegen_int2str(const char *result, const char *source) {
 }
 
 // ---------- Section 7.4.4 from spec
+void codegen_read(const char *result, const char *type) {
+  printf("READ %s %s\n", result, type);
+}
+
+void codegen_write(const char *symbol) {
+  printf("WRITE %s\n", symbol);
+}
+
 
 // ---------- Section 7.4.5 from spec
 

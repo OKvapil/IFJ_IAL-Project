@@ -236,6 +236,10 @@ void codegen_float2str(const char *result, const char *source);
  */
 void codegen_int2str(const char *result, const char *source);
 // ---------- Section 7.4.4 from spec
+// TODO: Doxy coms
+void codegen_read(const char *result, const char *type);
+// TODO: Doxy coms
+void codegen_write(const char *symbol);
 
 // ---------- Section 7.4.5 from spec
 
