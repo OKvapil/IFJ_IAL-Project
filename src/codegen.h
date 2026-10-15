@@ -396,6 +396,71 @@ void codegen_type(const char *result, const char *source);
  */
 void codegen_isint(const char *result, const char *source);
 // ---------- Section 7.4.8 from spec
+/**
+ * @brief Prints LABEL (defines a label at the currentposition in the code)
+ *
+ * @param label_literal name of the label "$while"
+ *
+ * @note Redefinice stejneho navesti (error 52)
+ */
+void codegen_label(const char *label_literal);
 
+/**
+ * @brief Prints JUMP (jump to a label)
+ *
+ * @param label Name of target label
+ *
+ * @note Skok na neexistujici navesti (error 52)
+ */
+void codegen_jump(const char *label);
+
+/**
+ * @brief Prints JUMPIFEQ (jumps to label if source1 = source2)
+ *
+ * @param label Name of the target lable
+ * @param source1 First operand
+ * @param source2 Second operand
+ *
+ * @note Skok na neexistujici navesti (error 52)
+ * @note Operandy musi byt stejneho typu, nebo jeden z nich nil, jinak (error
+ * 53)
+ */
+void codegen_jumpifeq(const char *label, const char *source1,
+                      const char *source2);
+
+/**
+ * @brief Prints JUMPIFNEQ (jumps to label if source1 != source2)
+ *
+ * @param label Name of the target lable
+ * @param source1 First operand
+ * @param source2 Second operand
+ *
+ * @note Skok na neexistujici navesti (error 52)
+ * @note Operandy musi byt stejneho typu, nebo jeden z nich nil, jinak (error
+ * 53)
+ */
+void codegen_jumpifneq(const char *label, const char *source1,
+                       const char *source2);
+
+/**
+ * @brief Prints EXIT (exits interpreter with return code)
+ *
+ * @param result Return code (int, variable or const)
+ *
+ * @note Hodnota mimo 0-49 (error 57)
+ */
+void codegen_exit(const char *result);
 // ---------- Section 7.4.9 from spec
+
+/**
+ * @brief Prints BREAK (prints state to stderr)
+ */
+void codegen_break(void);
+
+/**
+ * @brief Prints DPRINT (prints value to stderr)
+ *
+ * @param symbol Value to print
+ */
+void codegen_dprint(const char *symbol);
 #endif

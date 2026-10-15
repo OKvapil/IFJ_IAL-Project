@@ -151,5 +151,24 @@ void codegen_isint(const char *result, const char *source) {
   printf("ISINT %s %s\n", result, source);
 }
 // ---------- Section 7.4.8 from spec
+void codegen_label(const char *label_literal) {
+  printf("LABEL %s\n", label_literal);
+}
 
+void codegen_jump(const char *label) { printf("JUMP %s\n", label); }
+
+void codegen_jumpifeq(const char *label, const char *source1,
+                      const char *source2) {
+  printf("JUMPIFEQ %s %s %s\n", label, source1, source2);
+}
+
+void codegen_jumpifneq(const char *label, const char *source1,
+                       const char *source2) {
+  printf("JUMPIFNEQ %s %s %s\n", label, source1, source2);
+}
+
+void codegen_exit(const char *result) { printf("EXIT %s\n", result); }
 // ---------- Section 7.4.9 from spec
+void codegen_break(void) { printf("BREAK\n"); }
+
+void codegen_dprint(const char *symbol) { printf("DPRINT %s\n", symbol); }
