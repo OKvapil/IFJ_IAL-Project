@@ -340,9 +340,61 @@ void codegen_setchar(const char *string, const char *position,
                      const char *source);
 
 // ---------- Section 7.4.6 from spec
+/**
+ * @brief Prints NEWARRAY (creates an array)
+ *
+ * @param result Variable that receives array reference
+ * @param size Number of elements
+ *
+ * @note Spatny typ operandu (error 53)
+ */
+void codegen_newarray(const char *result, const char *size);
 
+/**
+ * @brief Prints ARRAYGET (result = array[position])
+ *
+ * @param result Variable that receives the element
+ * @param array Variable holding array reference
+ * @param position Index of the element
+ *
+ * @note Spatny typ operandu (error 53)
+ * @note Index mimo velikost pole (error 58)
+ */
+void codegen_arrayget(const char *result, const char *array,
+                      const char *position);
+
+/**
+ * @brief Prints ARRAYSET (array[position] = element)
+ *
+ * @param array Variable holding array reference
+ * @param position position of the element
+ * @param element Element to store
+ *
+ * @note Spatny typ operandu (error 53)
+ * @note Index mimo velikost pole (error 58)
+ */
+void codegen_arrayset(const char *array, const char *position,
+                      const char *element);
 // ---------- Section 7.4.7 from spec
+/**
+ * @brief Prints TYPE (result = int/bool/float/string/nil/array)
+ *
+ * @param result Variable that receives type name
+ * @param source Variable or constant to inspect
+ *
+ * @note U neinicializovane promenne je vysledek prazdny retezec
+ */
+void codegen_type(const char *result, const char *source);
 
+/**
+ * @brief Prints ISINT (result = true if it is int)
+ *
+ * @param result Variable that receives bool result
+ * @param source Number to be tested
+ *
+ * @note Operand typu float nebo int, jinak (error 53)
+ */
+void codegen_isint(const char *result, const char *source);
 // ---------- Section 7.4.8 from spec
 
 // ---------- Section 7.4.9 from spec

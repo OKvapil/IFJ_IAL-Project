@@ -129,9 +129,27 @@ void codegen_setchar(const char *string, const char *position,
 }
 
 // ---------- Section 7.4.6 from spec
+void codegen_newarray(const char *result, const char *size) {
+  printf("NEWARRAY %s %s\n", result, size);
+}
 
+void codegen_arrayget(const char *result, const char *array,
+                      const char *position) {
+  printf("SETCHAR %s %s %s\n", result, array, position);
+}
+
+void codegen_arrayset(const char *array, const char *position,
+                      const char *element) {
+  printf("ARRAYSET %s %s %s\n", array, position, element);
+}
 // ---------- Section 7.4.7 from spec
+void codegen_type(const char *result, const char *source) {
+  printf("TYPE %s %s\n", result, source);
+}
 
+void codegen_isint(const char *result, const char *source) {
+  printf("ISINT %s %s\n", result, source);
+}
 // ---------- Section 7.4.8 from spec
 
 // ---------- Section 7.4.9 from spec
