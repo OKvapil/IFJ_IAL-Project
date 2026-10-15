@@ -38,6 +38,45 @@ void codegen_defvar(const char *var);
  */
 void codegen_move(const char *dest, const char *source);
 
+/**
+ * @brief Prints CREATEFRAME (creates new temporary frame)
+ *
+ * @note Pripadny obsah TF se zahodi
+ */
+void codegen_createframe(void);
+
+/**
+ * @brief Prints PUSHFRAME (moves TF onto stack, it becomes LF)
+ *
+ * @note Po provedeni je TF nedefinovany, pred dalsim pouzitim se musi zavolat
+ * CREAATEFRAME
+ * @note Pristup k nedefinovanemu ramci (chyba 55)
+ */
+void codegen_pushframe(void);
+
+/**
+ * @brief Prints POPFRAME (moves the top LF from stack to TF)
+ *
+ * @note Pristup k nedefinovanemu ramci (chyba 55)
+ */
+void codegen_popframe(void);
+
+/**
+ * @brief Prints RETURN (returns to position saved by CALL)
+ *
+ * @note Pri prazdnem zasobniku (error 56)
+ */
+void codegen_return(void);
+
+/**
+ * @brief Prints CALL (jumps to label and saves return position)
+ *
+ * @param label Label of called function "$factorial"
+ *
+ * @note Skok na neexistujici navesti (error 52)
+ */
+void codegen_call(const char *label);
+
 // ---------- Section 7.4.2 from spec
 
 // ---------- Section 7.4.3 from spec
@@ -236,12 +275,69 @@ void codegen_float2str(const char *result, const char *source);
  */
 void codegen_int2str(const char *result, const char *source);
 // ---------- Section 7.4.4 from spec
-// TODO: Doxy coms
+/**
+ * @brief Prints READ (reads value from sti)
+ *
+ * @param result Variable that recieves that value
+ * @param type Type of the variable (int, bool, float, string)
+ */
 void codegen_read(const char *result, const char *type);
-// TODO: Doxy coms
+
+/**
+ * @brief Prints WRITE (writes a value to sto)
+ *
+ * @param symbol Value to print
+ */
 void codegen_write(const char *symbol);
 
 // ---------- Section 7.4.5 from spec
+/**
+ * @brief Prints CONCAT (result = source1 + source2, string concatenation)
+ *
+ * @param result Variable that recieves concatenated string
+ * @param source1 First string
+ * @param source2 Second string
+ *
+ * @note Oba operandy musi byt typu string, jinak (error 53)
+ */
+void codegen_concat(const char *result, const char *source1,
+                    const char *source2);
+
+/**
+ * @brief Prints STRLEN (result = length of the string)
+ *
+ * @param result Variable that recieves length of the sting
+ * @param source String (variable or constant)
+ *
+ * @note Operand musi byt typu string, jinak (error 53)
+ */
+void codegen_strlen(const char *result, const char *source);
+
+/**
+ * @brief Prints GETCHAR (result = character of string[position])
+ *
+ * @param result Variable that recieves one character string
+ * @param source Source string
+ * @param position Index of the character
+ *
+ * @note Operandy musi byt typu string a int, jinak (error 53)
+ * @note Index mimo retezec (error 58)
+ */
+void codegen_getchar(const char *result, const char *source,
+                     const char *position);
+
+/**
+ * @brief Prints SETCHAR (result = source1 + source2, string concatenation)
+ *
+ * @param string Variable holding a string, modified in place
+ * @param position Index of character replaced
+ * @param source String whose first character is inserted
+ *
+ * @note Oba operandy musi byt typu string, jinak (error 53)
+ * @note Index mimo retezec (error 58)
+ */
+void codegen_setchar(const char *string, const char *position,
+                     const char *source);
 
 // ---------- Section 7.4.6 from spec
 

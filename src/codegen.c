@@ -19,6 +19,15 @@ void codegen_move(const char *dest, const char *source) {
   printf("MOVE %s %s\n", dest, source);
 }
 
+void codegen_createframe(void) { printf("CREATEFRAME\n"); }
+
+void codegen_pushframe(void) { printf("PUSHFRAME\n"); }
+
+void codegen_popframe(void) { printf("POPFRAME\n"); }
+
+void codegen_return(void) { printf("RETURN\n"); }
+
+void codegen_call(const char *label) { printf("CALL %s\n", label); }
 // ---------- Section 7.4.2 from spec
 
 // ---------- Section 7.4.3 from spec
@@ -97,12 +106,27 @@ void codegen_read(const char *result, const char *type) {
   printf("READ %s %s\n", result, type);
 }
 
-void codegen_write(const char *symbol) {
-  printf("WRITE %s\n", symbol);
-}
-
+void codegen_write(const char *symbol) { printf("WRITE %s\n", symbol); }
 
 // ---------- Section 7.4.5 from spec
+void codegen_concat(const char *result, const char *source1,
+                    const char *source2) {
+  printf("CONCAT %s %s %s\n", result, source1, source2);
+}
+
+void codegen_strlen(const char *result, const char *source) {
+  printf("STRLEN %s %s\n", result, source);
+}
+
+void codegen_getchar(const char *result, const char *source,
+                     const char *position) {
+  printf("GETCHAR %s %s %s\n", result, source, position);
+}
+
+void codegen_setchar(const char *string, const char *position,
+                     const char *source) {
+  printf("SETCHAR %s %s %s\n", string, position, source);
+}
 
 // ---------- Section 7.4.6 from spec
 
