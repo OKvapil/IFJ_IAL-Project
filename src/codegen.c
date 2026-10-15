@@ -140,7 +140,7 @@ void codegen_newarray(const char *result, const char *size) {
 
 void codegen_arrayget(const char *result, const char *array,
                       const char *position) {
-  printf("SETCHAR %s %s %s\n", result, array, position);
+  printf("ARRAYGET %s %s %s\n", result, array, position);
 }
 
 void codegen_arrayset(const char *array, const char *position,
