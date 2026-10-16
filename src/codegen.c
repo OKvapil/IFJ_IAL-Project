@@ -147,6 +147,7 @@ void codegen_arrayset(const char *array, const char *position,
                       const char *element) {
   printf("ARRAYSET %s %s %s\n", array, position, element);
 }
+
 // ---------- Section 7.4.7 from spec
 void codegen_type(const char *result, const char *source) {
   printf("TYPE %s %s\n", result, source);
@@ -155,6 +156,7 @@ void codegen_type(const char *result, const char *source) {
 void codegen_isint(const char *result, const char *source) {
   printf("ISINT %s %s\n", result, source);
 }
+
 // ---------- Section 7.4.8 from spec
 void codegen_label(const char *label_literal) {
   printf("LABEL %s\n", label_literal);
@@ -173,6 +175,7 @@ void codegen_jumpifneq(const char *label, const char *source1,
 }
 
 void codegen_exit(const char *result) { printf("EXIT %s\n", result); }
+
 // ---------- Section 7.4.9 from spec
 void codegen_break(void) { printf("BREAK\n"); }
 
@@ -182,3 +185,16 @@ void codegen_dprint(const char *symbol) { printf("DPRINT %s\n", symbol); }
 static int label_counter = 0;
 
 int codegen_new_label_id(void) { return label_counter++; }
+
+// ---------- String literal escaping
+void codegen_print_escaped_string(const char *string) {
+  for (int idx = 0; string[idx] != '\0'; idx++) {
+    unsigned char character = (unsigned char)string[idx];
+    if (character == 92 || character == 35 || character <= 32) {
+      printf("\\%03d", character);
+    } else
+      printf("%c", character);
+  }
+}
+
+// ---------- Constant formating

@@ -496,4 +496,13 @@ void codegen_dprint(const char *symbol);
  * @return Id unique within the whole program
  */
 int codegen_new_label_id(void);
+
+// ---------- String literal escaping
+/**
+ * @brief Prints a string in IFJcode26 escaped form
+ *
+ * @param string String value
+ *
+ */
+void codegen_print_escaped_string(const char *string);
 #endif
