@@ -10,6 +10,8 @@
 #ifndef IFJ_IAL_PROJECT_CODEGEN_H
 #define IFJ_IAL_PROJECT_CODEGEN_H
 
+#include <stdbool.h>
+
 // TODO: Stack variants of instructions
 
 /**
@@ -505,4 +507,48 @@ int codegen_new_label_id(void);
  *
  */
 void codegen_print_escaped_string(const char *string);
+
+// ---------- Constant formating
+/**
+ * @brief Builds integer constant operand "int@integer"
+ *
+ * @param value Integer value
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_int(long long value);
+
+/**
+ * @brief Builds bool constant operand "bool@true/false"
+ *
+ * @param value Boolean value
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_bool(bool value);
+
+/**
+ * @brief Builds float constant operand "float@0x1.26666p+0"
+ *
+ * @param value Floating point value
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_float(double value);
+
+/**
+ * @brief Builds the nil constant operand "nil@nil"
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_nil(void);
+
+/**
+ * @brief Builds string constant operand "string@ahoj\032svete"
+ *
+ * @param string String value
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_string(const char *string);
 #endif

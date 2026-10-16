@@ -8,7 +8,10 @@
  */
 
 #include "codegen.h"
+#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 void codegen_header(void) { printf(".IFJcode26\n"); }
 
@@ -187,14 +190,108 @@ static int label_counter = 0;
 int codegen_new_label_id(void) { return label_counter++; }
 
 // ---------- String literal escaping
+/**
+ * @brief Checks whether a character must be escaped in an IFJcode26 string
+ *
+ * @param character Character to check
+ *
+ * @return true for characters with code 0 - 32, 35 and 92, false otherwise
+ */
+static bool needs_escape(unsigned char character) {
+  return character == 92 || character == 35 || character <= 32;
+}
+
 void codegen_print_escaped_string(const char *string) {
   for (int idx = 0; string[idx] != '\0'; idx++) {
     unsigned char character = (unsigned char)string[idx];
-    if (character == 92 || character == 35 || character <= 32) {
+    if (needs_escape(character)) {
       printf("\\%03d", character);
-    } else
+    } else {
       printf("%c", character);
+    }
   }
 }
 
 // ---------- Constant formating
+char *codegen_const_int(long long value) {
+  int length = snprintf(NULL, 0, "int@%lld", value);
+  if (length < 0) {
+    return NULL;
+  }
+
+  char *result = malloc(length + 1);
+  if (result == NULL) {
+    return NULL;
+  }
+
+  snprintf(result, length + 1, "int@%lld", value);
+
+  return result;
+}
+
+char *codegen_const_bool(bool value) {
+  char *text = value ? "bool@true" : "bool@false";
+
+  char *result = malloc(strlen(text) + 1);
+  if (result == NULL) {
+    return NULL;
+  }
+
+  strcpy(result, text);
+  return result;
+}
+
+char *codegen_const_float(double value) {
+  int length = snprintf(NULL, 0, "float@%a", value);
+  if (length < 0) {
+    return NULL;
+  }
+
+  char *result = malloc(length + 1);
+  if (result == NULL) {
+    return NULL;
+  }
+
+  snprintf(result, length + 1, "float@%a", value);
+
+  return result;
+}
+
+char *codegen_const_nil(void) {
+  char *result = malloc(strlen("nil@nil") + 1);
+
+  if (result == NULL) {
+    return NULL;
+  }
+  strcpy(result, "nil@nil");
+  return result;
+}
+
+char *codegen_const_string(const char *string) {
+  unsigned int length = 7; // "string@"
+
+  for (int idx = 0; string[idx] != '\0'; idx++) {
+    length += needs_escape((unsigned char)string[idx]) ? 4 : 1;
+  }
+
+  char *result = malloc(length + 1);
+
+  if (result == NULL) {
+    return NULL;
+  }
+
+  strcpy(result, "string@");
+  int position = strlen("string@");
+  for (int idx = 0; string[idx] != '\0'; idx++) {
+    unsigned char character = (unsigned char)string[idx];
+    if (needs_escape(character)) {
+      sprintf(result + position, "\\%03d", character);
+      position += 4;
+    } else {
+      result[position] = (char)character;
+      position++;
+    }
+  }
+  result[position] = '\0';
+  return result;
+}
