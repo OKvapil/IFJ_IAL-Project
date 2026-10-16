@@ -177,3 +177,8 @@ void codegen_exit(const char *result) { printf("EXIT %s\n", result); }
 void codegen_break(void) { printf("BREAK\n"); }
 
 void codegen_dprint(const char *symbol) { printf("DPRINT %s\n", symbol); }
+
+// ---------- Unique label id generator
+static int label_counter = 0;
+
+int codegen_new_label_id(void) { return label_counter++; }

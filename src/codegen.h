@@ -488,4 +488,12 @@ void codegen_break(void);
  * @param symbol Value to print
  */
 void codegen_dprint(const char *symbol);
+
+// ---------- Unique label id generator
+/**
+ * @brief Returns new label id (int)
+ *
+ * @return Id unique within the whole program
+ */
+int codegen_new_label_id(void);
 #endif
