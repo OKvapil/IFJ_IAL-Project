@@ -175,7 +175,6 @@ void codegen_idiv(const char *result, const char *source1, const char *source2);
  *
  * @note Oba operandy musi byt stejneho typu (int, float, bool, string), jinak
  * (error 53)
- * @note Lexikograficke porovnani false < true
  */
 void codegen_lt(const char *result, const char *source1, const char *source2);
 
@@ -188,7 +187,6 @@ void codegen_lt(const char *result, const char *source1, const char *source2);
  *
  * @note Oba operandy musi byt stejneho typu (int, float, bool, string), jinak
  * (error 53)
- * @note Lexikograficke porovnani false < true
  */
 void codegen_gt(const char *result, const char *source1, const char *source2);
 
@@ -199,9 +197,8 @@ void codegen_gt(const char *result, const char *source1, const char *source2);
  * @param source1 First operand
  * @param source2 Second operand
  *
- * @note Oba operandy musi byt stejneho typu (int, float, bool, string), jinak
- * (error 53)
- * @note Lexikograficke porovnani false < true
+ * @note Oba operandy musi byt stejneho typu (int, float, bool, string) nebo
+ * jeden z nich nil, jinak (error 53)
  */
 void codegen_eq(const char *result, const char *source1, const char *source2);
 
@@ -251,7 +248,7 @@ void codegen_int2float(const char *result, const char *source);
  * @brief Prints FLOAT2INT (converts a float value into int value )
  *
  * @param result Result variable that recives int value
- * @param source Integer value (variable or constant)
+ * @param source Float value (variable or constant)
  *
  * @note Operand musi byt typu float, jinak (error 53)
  */
@@ -307,6 +304,8 @@ void codegen_int2str(const char *result, const char *source);
  *
  * @param result Variable that recieves that value
  * @param type Type of the variable (int, bool, float, string)
+ *
+ * @note Typ se pise bez @ "int" ne "int@"
  */
 void codegen_read(const char *result, const char *type);
 
@@ -354,14 +353,14 @@ void codegen_getchar(const char *result, const char *source,
                      const char *position);
 
 /**
- * @brief Prints SETCHAR (result = source1 + source2, string concatenation)
+ * @brief Prints SETCHAR (replaces character at position in string)
  *
  * @param string Variable holding a string, modified in place
  * @param position Index of character replaced
  * @param source String whose first character is inserted
  *
- * @note Oba operandy musi byt typu string, jinak (error 53)
- * @note Index mimo retezec (error 58)
+ * @note Spravne typy operandu, jinak (error 53)
+ * @note Index mimo retezec, nebo prazdny retezec (error 58)
  */
 void codegen_setchar(const char *string, const char *position,
                      const char *source);
@@ -414,7 +413,7 @@ void codegen_arrayset(const char *array, const char *position,
 void codegen_type(const char *result, const char *source);
 
 /**
- * @brief Prints ISINT (result = true if it is int)
+ * @brief Prints ISINT (result = true if it is int or float ending with .00)
  *
  * @param result Variable that receives bool result
  * @param source Number to be tested
@@ -472,11 +471,11 @@ void codegen_jumpifneq(const char *label, const char *source1,
 /**
  * @brief Prints EXIT (exits interpreter with return code)
  *
- * @param result Return code (int, variable or const)
+ * @param code Return code (int, variable or const)
  *
  * @note Hodnota mimo 0-49 (error 57)
  */
-void codegen_exit(const char *result);
+void codegen_exit(const char *code);
 // ---------- Section 7.4.9 from spec
 
 /**

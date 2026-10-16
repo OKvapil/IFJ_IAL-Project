@@ -177,7 +177,7 @@ void codegen_jumpifneq(const char *label, const char *source1,
   printf("JUMPIFNEQ %s %s %s\n", label, source1, source2);
 }
 
-void codegen_exit(const char *result) { printf("EXIT %s\n", result); }
+void codegen_exit(const char *code) { printf("EXIT %s\n", code); }
 
 // ---------- Section 7.4.9 from spec
 void codegen_break(void) { printf("BREAK\n"); }
@@ -230,7 +230,7 @@ char *codegen_const_int(long long value) {
 }
 
 char *codegen_const_bool(bool value) {
-  char *text = value ? "bool@true" : "bool@false";
+  const char *text = value ? "bool@true" : "bool@false";
 
   char *result = malloc(strlen(text) + 1);
   if (result == NULL) {
