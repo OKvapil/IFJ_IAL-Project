@@ -39,17 +39,17 @@ static unsigned long hash(const char *str) {
   return h;
 }
 
-static void get_index_and_step(HashTable *hash_table, const char *key,
+static void get_index_and_step(unsigned int table_size, const char *key,
                                unsigned long *first, unsigned long *step) {
   unsigned long h = hash(key);
-  *first = h % hash_table->size;
-  *step = 1 + h % (hash_table->size - 1);
+  *first = h % table_size;
+  *step = 1 + h % (table_size - 1);
 }
 
 Entry *ht_find(HashTable *hash_table, const char *key) {
   unsigned long first;
   unsigned long step;
-  get_index_and_step(hash_table, key, &first, &step);
+  get_index_and_step(hash_table->size, key, &first, &step);
 
   unsigned long slot_idx = first;
   for (unsigned int i = 0; i < hash_table->size; i++) {
@@ -68,22 +68,65 @@ Entry *ht_find(HashTable *hash_table, const char *key) {
 }
 
 // return 0 when found, return -1 when no free slot
-static int find_free_slot(HashTable *hash_table, const char *key,
+static int find_free_slot(Entry **array, unsigned int size, const char *key,
                           unsigned long *slot_idx) {
   unsigned long first;
   unsigned long step;
-  get_index_and_step(hash_table, key, &first, &step);
+  get_index_and_step(size, key, &first, &step);
 
   *slot_idx = first;
-  for (unsigned int i = 0; i < hash_table->size; i++) {
-    if (hash_table->array[*slot_idx] == NULL) {
+  for (unsigned int i = 0; i < size; i++) {
+    if (array[*slot_idx] == NULL) {
       return 0;
     }
 
-    *slot_idx = (*slot_idx + step) % hash_table->size;
+    *slot_idx = (*slot_idx + step) % size;
   }
 
   return -1;
+}
+
+static int ht_resize(HashTable *hash_table) {
+  unsigned int new_size = hash_table->size;
+  for (unsigned int i = 0; i < sizeof(primes) / sizeof(primes[0]); i++) {
+    if (primes[i] > hash_table->size) {
+      new_size = primes[i];
+      break;
+    }
+  }
+
+  if (new_size == hash_table->size) {
+    return -1;
+  }
+
+  Entry **new_array = malloc(new_size * sizeof(Entry *));
+  if (new_array == NULL) {
+    return -1;
+  }
+
+  for (unsigned int i = 0; i < new_size; i++) {
+    new_array[i] = NULL;
+  }
+
+  for (unsigned int i = 0; i < hash_table->size; i++) {
+    if (hash_table->array[i] != NULL) {
+
+      unsigned long slot_idx;
+      if (find_free_slot(new_array, new_size, hash_table->array[i]->identifier,
+                         &slot_idx) == -1) {
+        free(new_array);
+        return -1;
+      }
+
+      new_array[slot_idx] = hash_table->array[i];
+    }
+  }
+
+  free(hash_table->array);
+  hash_table->array = new_array;
+  hash_table->size = new_size;
+
+  return 0;
 }
 
 Entry *ht_add(HashTable *hash_table, const char *key, void *data) {
@@ -93,7 +136,14 @@ Entry *ht_add(HashTable *hash_table, const char *key, void *data) {
     return NULL;
   }
 
-  if (find_free_slot(hash_table, key, &slot_idx) == -1) {
+  if ((hash_table->count + 1) * 2 > hash_table->size) {
+    if (ht_resize(hash_table) == -1) {
+      return NULL;
+    }
+  }
+
+  if (find_free_slot(hash_table->array, hash_table->size, key, &slot_idx) ==
+      -1) {
     return NULL;
   }
 

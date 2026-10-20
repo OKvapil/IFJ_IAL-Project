@@ -13,14 +13,15 @@ typedef struct Entry_t {
  */
 typedef struct HashTable_t {
   Entry **array;      /**< The array of the entry slots. */
-  unsigned int size;  /**< The number of slots in the array */
-  unsigned int count; /**< The number of entries in the array */
+  unsigned int size;  /**< The number of slots in the array. */
+  unsigned int count; /**< The number of entries in the array. */
 } HashTable;
 
 /**
  * @brief Initializes the hash table.
  *
  * Allocates space for the hash table and initializes all slots to NULL.
+ * The initial size is 101 slots.
  *
  * @return A pointer to the initialized hash table, NULL if initialization
  * failed.
@@ -31,6 +32,8 @@ HashTable *ht_init(void);
  * @brief Finds an entry by its key.
  *
  * Uses the djb2 hash function.
+ * Collisions are resolved by open addressing with double hashing.
+ * The table grows automatically when the load passes half of the capacity.
  *
  * @param hash_table The hash table that the key is searched in.
  * @param key The key that is searched.
