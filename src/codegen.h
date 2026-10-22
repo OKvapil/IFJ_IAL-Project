@@ -12,7 +12,6 @@
 
 #include <stdbool.h>
 
-
 /**
  * @brief Prints required "IFJcode26" header line
  */
