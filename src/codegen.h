@@ -12,7 +12,6 @@
 
 #include <stdbool.h>
 
-// TODO: Stack variants of instructions
 
 /**
  * @brief Prints required "IFJcode26" header line
@@ -53,7 +52,7 @@ void codegen_createframe(void);
  * @brief Prints PUSHFRAME (moves TF onto stack, it becomes LF)
  *
  * @note Po provedeni je TF nedefinovany, pred dalsim pouzitim se musi zavolat
- * CREAATEFRAME
+ * CREATEFRAME
  * @note Pristup k nedefinovanemu ramci (chyba 55)
  */
 void codegen_pushframe(void);
@@ -298,6 +297,144 @@ void codegen_float2str(const char *result, const char *source);
  * @note Operand musi byt typu int, jinak (error 53)
  */
 void codegen_int2str(const char *result, const char *source);
+
+// ---------- Section 7.4.3 stack instructions
+/**
+ * @brief Prints ADDS (stack version of ADD)
+ *
+ * @note Vybere dve hodnoty ze zasobniku a ulozi jejich soucet
+ * @note Stejna pravidla a chyby jako ADD
+ */
+void codegen_adds(void);
+
+/**
+ * @brief Prints SUBS (stack version of SUB)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany - 1. vybrany
+ * @note Stejná pravidla a chyby jako SUB
+ */
+void codegen_subs(void);
+
+/**
+ * @brief Prints MULS (stack version of MUL)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany * 1. vybrany
+ * @note Stejná pravidla a chyby jako MUL
+ */
+void codegen_muls(void);
+
+/**
+ * @brief Prints DIVS (stack version of DIV)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany/ 1. vybrany
+ * @note Stejná pravidla a chyby jako DIV
+ */
+void codegen_divs(void);
+
+/**
+ * @brief Prints IDIVS (stack version of IDIV)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany/ 1. vybrany
+ * @note Stejná pravidla a chyby jako IDIV
+ */
+void codegen_idivs(void);
+
+/**
+ * @brief Prints LTS (stack version of LT)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany < 1. vybrany (bool)
+ * @note Stejná pravidla a chyby jako LT
+ */
+void codegen_lts(void);
+
+/**
+ * @brief Prints GTS (stack version of GT)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany > 1. vybrany (bool)
+ * @note Stejná pravidla a chyby jako GT
+ */
+void codegen_gts(void);
+
+/**
+ * @brief Prints EQS (stack version of EQ)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany = 1. vybrany (bool)
+ * @note Stejná pravidla a chyby jako EQ
+ */
+void codegen_eqs(void);
+
+/**
+ * @brief Prints ANDS (stack version of AND)
+ *
+ * @note Vybere dve hodnoty (bool) ze zasobniku a ulozi jejich konjunkci
+ * @note Stejná pravidla a chyby jako AND
+ */
+void codegen_ands(void);
+
+/**
+ * @brief Prints ORS (stack version of OR)
+ *
+ * @note Vybere dve hodnoty (bool) ze zasobniku a ulozi jejich disjunkci
+ * @note Stejna pravidla a chyby jako OR.
+ */
+void codegen_ors(void);
+
+/**
+ * @brief Prints NOTS (stack version of NOT)
+ *
+ * @note Vybere hodnotu (bool) ze zasobniku a ulozi jeji negaci
+ * @note Stejna pravidla a chyby jako NOT.
+ */
+void codegen_nots(void);
+
+/**
+ * @brief Prints INT2FLOATS (stack version of INT2FLOAT)
+ *
+ * @note Vybere hodnotu typu int a ulozi ji prevedenou na float
+ * @note Stejna pravidla a chyby jako INT2FLOAT.
+ */
+void codegen_int2floats(void);
+
+/**
+ * @brief Prints FLOAT2INTS (stack version of FLOAT2INT)
+ *
+ * @note Vybere hodnotu typu float a ulozi ji prevedenou na int
+ * @note Stejna pravidla a chyby jako FLOAT2INT.
+ */
+void codegen_float2ints(void);
+
+/**
+ * @brief Prints INT2CHARS (stack version of INT2CHAR)
+ *
+ * @note Vybere hodnotu typu int a ulozi ji prevedenou na char
+ * @note Stejna pravidla a chyby jako INT2CHAR.
+ */
+void codegen_int2chars(void);
+
+/**
+ * @brief Prints STRI2INTS (stack version of STRI2INTS)
+ *
+ * @note Vybere hodnotu typu string a ulozi ji prevedenou na int
+ * @note Stejna pravidla a chyby jako STRI2INTS
+ */
+void codegen_stri2ints(void);
+
+/**
+ * @brief Prints FLOAT2STRS (stack version of FLOAT2STR)
+ *
+ * @note Vybere hodnotu typu float a ulozi ji prevedenou na string
+ * @note Stejna pravidla a chyby jako FLOAT2STR
+ */
+void codegen_float2strs(void);
+
+/**
+ * @brief Prints INT2STRS (stack version of INT2STRS)
+ *
+ * @note Vybere hodnotu typu int a ulozi ji prevedenou na string
+ * @note Stejna pravidla a chyby jako INT2STRS
+ */
+void codegen_int2strs(void);
+
 // ---------- Section 7.4.4 from spec
 /**
  * @brief Prints READ (reads value from sti)
@@ -421,6 +558,25 @@ void codegen_type(const char *result, const char *source);
  * @note Operand typu float nebo int, jinak (error 53)
  */
 void codegen_isint(const char *result, const char *source);
+
+// ---------- Section 7.4.7 stack instructions
+/**
+ * @brief Prints TYPES (stack version of TYPE)
+ *
+ * @note Vybere jednu hodnotu ze zasobniku a ulozi retezec s nazvem jejiho typu
+ * @note Stejna pravidla jako TYPE.
+ */
+void codegen_types(void);
+
+/**
+ * @brief Prints ISINTS (stack version of ISINT)
+ *
+ * @note Vybere jednu hodnotu ze zasobniku a (bool) pokud je to int nebo float s
+ * .00
+ * @note Stejna pravidla jako ISINT.
+ */
+void codegen_isints(void);
+
 // ---------- Section 7.4.8 from spec
 /**
  * @brief Prints LABEL (defines a label at the currentposition in the code)
@@ -476,6 +632,28 @@ void codegen_jumpifneq(const char *label, const char *source1,
  * @note Hodnota mimo 0-49 (error 57)
  */
 void codegen_exit(const char *code);
+
+// ---------- Section 7.4.8 stack instructions
+/**
+ * @brief Prints JUMPIFEQS (stack version of JUMPIFEQ)
+ *
+ * @param label Name of the target label
+ *
+ * @note Vybere dve hodnoty ze zasobniku a skoci, pokud se rovnaji
+ * @note Stejna pravidla a chyby jako JUMPIFEQ.
+ */
+void codegen_jumpifeqs(const char *label);
+
+/**
+ * @brief Prints JUMPIFNEQS (stack version of JUMPIFNEQ)
+ *
+ * @param label Name of the target label
+ *
+ * @note Vybere dve hodnoty ze zasobniku a skoci, pokud se nerovnaji
+ * @note Stejna pravidla a chyby jako JUMPIFNEQ.
+ */
+void codegen_jumpifneqs(const char *label);
+
 // ---------- Section 7.4.9 from spec
 
 /**

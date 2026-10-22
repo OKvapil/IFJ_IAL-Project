@@ -109,6 +109,40 @@ void codegen_int2str(const char *result, const char *source) {
   printf("INT2STR %s %s\n", result, source);
 }
 
+// ---------- Section 7.4.3 stack instructions
+void codegen_adds(void) { printf("ADDS\n"); }
+
+void codegen_subs(void) { printf("SUBS\n"); }
+
+void codegen_muls(void) { printf("MULS\n"); }
+
+void codegen_divs(void) { printf("DIVS\n"); }
+
+void codegen_idivs(void) { printf("IDIVS\n"); }
+
+void codegen_lts(void) { printf("LTS\n"); }
+
+void codegen_gts(void) { printf("GTS\n"); }
+
+void codegen_eqs(void) { printf("EQS\n"); }
+
+void codegen_ands(void) { printf("ANDS\n"); }
+
+void codegen_ors(void) { printf("ORS\n"); }
+
+void codegen_nots(void) { printf("NOTS\n"); }
+
+void codegen_int2floats(void) { printf("INT2FLOATS\n"); }
+
+void codegen_float2ints(void) { printf("FLOAT2INTS\n"); }
+
+void codegen_int2chars(void) { printf("INT2CHARS\n"); }
+
+void codegen_stri2ints(void) { printf("STRI2INTS\n"); }
+
+void codegen_float2strs(void) { printf("FLOAT2STRS\n"); }
+
+void codegen_int2strs(void) { printf("INT2STRS\n"); }
 // ---------- Section 7.4.4 from spec
 void codegen_read(const char *result, const char *type) {
   printf("READ %s %s\n", result, type);
@@ -160,6 +194,11 @@ void codegen_isint(const char *result, const char *source) {
   printf("ISINT %s %s\n", result, source);
 }
 
+// ---------- Section 7.4.7 stack instructions
+void codegen_types(void) { printf("TYPES\n"); }
+
+void codegen_isints(void) { printf("ISINTS\n"); }
+
 // ---------- Section 7.4.8 from spec
 void codegen_label(const char *label_literal) {
   printf("LABEL %s\n", label_literal);
@@ -178,6 +217,11 @@ void codegen_jumpifneq(const char *label, const char *source1,
 }
 
 void codegen_exit(const char *code) { printf("EXIT %s\n", code); }
+
+// ---------- Section 7.4.8 stack instructions
+void codegen_jumpifeqs(const char *label) { printf("JUMPIFEQS %s\n", label); }
+
+void codegen_jumpifneqs(const char *label) { printf("JUMPIFNEQS %s\n", label); }
 
 // ---------- Section 7.4.9 from spec
 void codegen_break(void) { printf("BREAK\n"); }
