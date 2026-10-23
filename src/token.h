@@ -32,7 +32,6 @@ typedef enum {
     TOKEN_INT_LIT,          // Integer literal
     TOKEN_FLOAT_LIT,        // Double literal
     TOKEN_STRING_LIT,       // String literal 
-    TOKEN_UNIT_LIT,         // Unit literal ()
 
     /* --- Annotations --- */
     TOKEN_ANNOT_MAIN,       // '@main' (entry point function marker)
