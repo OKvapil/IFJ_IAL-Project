@@ -8,7 +8,10 @@
  */
 
 #include "codegen.h"
+#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 void codegen_header(void) { printf(".IFJcode26\n"); }
 
@@ -106,6 +109,40 @@ void codegen_int2str(const char *result, const char *source) {
   printf("INT2STR %s %s\n", result, source);
 }
 
+// ---------- Section 7.4.3 stack instructions
+void codegen_adds(void) { printf("ADDS\n"); }
+
+void codegen_subs(void) { printf("SUBS\n"); }
+
+void codegen_muls(void) { printf("MULS\n"); }
+
+void codegen_divs(void) { printf("DIVS\n"); }
+
+void codegen_idivs(void) { printf("IDIVS\n"); }
+
+void codegen_lts(void) { printf("LTS\n"); }
+
+void codegen_gts(void) { printf("GTS\n"); }
+
+void codegen_eqs(void) { printf("EQS\n"); }
+
+void codegen_ands(void) { printf("ANDS\n"); }
+
+void codegen_ors(void) { printf("ORS\n"); }
+
+void codegen_nots(void) { printf("NOTS\n"); }
+
+void codegen_int2floats(void) { printf("INT2FLOATS\n"); }
+
+void codegen_float2ints(void) { printf("FLOAT2INTS\n"); }
+
+void codegen_int2chars(void) { printf("INT2CHARS\n"); }
+
+void codegen_stri2ints(void) { printf("STRI2INTS\n"); }
+
+void codegen_float2strs(void) { printf("FLOAT2STRS\n"); }
+
+void codegen_int2strs(void) { printf("INT2STRS\n"); }
 // ---------- Section 7.4.4 from spec
 void codegen_read(const char *result, const char *type) {
   printf("READ %s %s\n", result, type);
@@ -147,6 +184,7 @@ void codegen_arrayset(const char *array, const char *position,
                       const char *element) {
   printf("ARRAYSET %s %s %s\n", array, position, element);
 }
+
 // ---------- Section 7.4.7 from spec
 void codegen_type(const char *result, const char *source) {
   printf("TYPE %s %s\n", result, source);
@@ -155,6 +193,12 @@ void codegen_type(const char *result, const char *source) {
 void codegen_isint(const char *result, const char *source) {
   printf("ISINT %s %s\n", result, source);
 }
+
+// ---------- Section 7.4.7 stack instructions
+void codegen_types(void) { printf("TYPES\n"); }
+
+void codegen_isints(void) { printf("ISINTS\n"); }
+
 // ---------- Section 7.4.8 from spec
 void codegen_label(const char *label_literal) {
   printf("LABEL %s\n", label_literal);
@@ -172,8 +216,126 @@ void codegen_jumpifneq(const char *label, const char *source1,
   printf("JUMPIFNEQ %s %s %s\n", label, source1, source2);
 }
 
-void codegen_exit(const char *result) { printf("EXIT %s\n", result); }
+void codegen_exit(const char *code) { printf("EXIT %s\n", code); }
+
+// ---------- Section 7.4.8 stack instructions
+void codegen_jumpifeqs(const char *label) { printf("JUMPIFEQS %s\n", label); }
+
+void codegen_jumpifneqs(const char *label) { printf("JUMPIFNEQS %s\n", label); }
+
 // ---------- Section 7.4.9 from spec
 void codegen_break(void) { printf("BREAK\n"); }
 
 void codegen_dprint(const char *symbol) { printf("DPRINT %s\n", symbol); }
+
+// ---------- Unique label id generator
+static int label_counter = 0;
+
+int codegen_new_label_id(void) { return label_counter++; }
+
+// ---------- String literal escaping
+/**
+ * @brief Checks whether a character must be escaped in an IFJcode26 string
+ *
+ * @param character Character to check
+ *
+ * @return true for characters with code 0 - 32, 35 and 92, false otherwise
+ */
+static bool needs_escape(unsigned char character) {
+  return character == 92 || character == 35 || character <= 32;
+}
+
+void codegen_print_escaped_string(const char *string) {
+  for (int idx = 0; string[idx] != '\0'; idx++) {
+    unsigned char character = (unsigned char)string[idx];
+    if (needs_escape(character)) {
+      printf("\\%03d", character);
+    } else {
+      printf("%c", character);
+    }
+  }
+}
+
+// ---------- Constant formating
+char *codegen_const_int(long long value) {
+  int length = snprintf(NULL, 0, "int@%lld", value);
+  if (length < 0) {
+    return NULL;
+  }
+
+  char *result = malloc(length + 1);
+  if (result == NULL) {
+    return NULL;
+  }
+
+  snprintf(result, length + 1, "int@%lld", value);
+
+  return result;
+}
+
+char *codegen_const_bool(bool value) {
+  const char *text = value ? "bool@true" : "bool@false";
+
+  char *result = malloc(strlen(text) + 1);
+  if (result == NULL) {
+    return NULL;
+  }
+
+  strcpy(result, text);
+  return result;
+}
+
+char *codegen_const_float(double value) {
+  int length = snprintf(NULL, 0, "float@%a", value);
+  if (length < 0) {
+    return NULL;
+  }
+
+  char *result = malloc(length + 1);
+  if (result == NULL) {
+    return NULL;
+  }
+
+  snprintf(result, length + 1, "float@%a", value);
+
+  return result;
+}
+
+char *codegen_const_nil(void) {
+  char *result = malloc(strlen("nil@nil") + 1);
+
+  if (result == NULL) {
+    return NULL;
+  }
+  strcpy(result, "nil@nil");
+  return result;
+}
+
+char *codegen_const_string(const char *string) {
+  unsigned int length = 7; // "string@"
+
+  for (int idx = 0; string[idx] != '\0'; idx++) {
+    length += needs_escape((unsigned char)string[idx]) ? 4 : 1;
+  }
+
+  char *result = malloc(length + 1);
+
+  if (result == NULL) {
+    return NULL;
+  }
+
+  strcpy(result, "string@");
+  int position = strlen("string@");
+  for (int idx = 0; string[idx] != '\0'; idx++) {
+    unsigned char character = (unsigned char)string[idx];
+    if (needs_escape(character)) {
+      sprintf(result + position, "\\%03d", character);
+      position += 4;
+    } else {
+      result[position] = (char)character;
+      position++;
+    }
+  }
+  result[position] = '\0';
+  return result;
+}

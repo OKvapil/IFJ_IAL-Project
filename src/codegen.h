@@ -10,7 +10,7 @@
 #ifndef IFJ_IAL_PROJECT_CODEGEN_H
 #define IFJ_IAL_PROJECT_CODEGEN_H
 
-// TODO: Stack variants of instructions
+#include <stdbool.h>
 
 /**
  * @brief Prints required "IFJcode26" header line
@@ -51,7 +51,7 @@ void codegen_createframe(void);
  * @brief Prints PUSHFRAME (moves TF onto stack, it becomes LF)
  *
  * @note Po provedeni je TF nedefinovany, pred dalsim pouzitim se musi zavolat
- * CREAATEFRAME
+ * CREATEFRAME
  * @note Pristup k nedefinovanemu ramci (chyba 55)
  */
 void codegen_pushframe(void);
@@ -173,7 +173,6 @@ void codegen_idiv(const char *result, const char *source1, const char *source2);
  *
  * @note Oba operandy musi byt stejneho typu (int, float, bool, string), jinak
  * (error 53)
- * @note Lexikograficke porovnani false < true
  */
 void codegen_lt(const char *result, const char *source1, const char *source2);
 
@@ -186,7 +185,6 @@ void codegen_lt(const char *result, const char *source1, const char *source2);
  *
  * @note Oba operandy musi byt stejneho typu (int, float, bool, string), jinak
  * (error 53)
- * @note Lexikograficke porovnani false < true
  */
 void codegen_gt(const char *result, const char *source1, const char *source2);
 
@@ -197,9 +195,8 @@ void codegen_gt(const char *result, const char *source1, const char *source2);
  * @param source1 First operand
  * @param source2 Second operand
  *
- * @note Oba operandy musi byt stejneho typu (int, float, bool, string), jinak
- * (error 53)
- * @note Lexikograficke porovnani false < true
+ * @note Oba operandy musi byt stejneho typu (int, float, bool, string) nebo
+ * jeden z nich nil, jinak (error 53)
  */
 void codegen_eq(const char *result, const char *source1, const char *source2);
 
@@ -249,7 +246,7 @@ void codegen_int2float(const char *result, const char *source);
  * @brief Prints FLOAT2INT (converts a float value into int value )
  *
  * @param result Result variable that recives int value
- * @param source Integer value (variable or constant)
+ * @param source Float value (variable or constant)
  *
  * @note Operand musi byt typu float, jinak (error 53)
  */
@@ -299,12 +296,152 @@ void codegen_float2str(const char *result, const char *source);
  * @note Operand musi byt typu int, jinak (error 53)
  */
 void codegen_int2str(const char *result, const char *source);
+
+// ---------- Section 7.4.3 stack instructions
+/**
+ * @brief Prints ADDS (stack version of ADD)
+ *
+ * @note Vybere dve hodnoty ze zasobniku a ulozi jejich soucet
+ * @note Stejna pravidla a chyby jako ADD
+ */
+void codegen_adds(void);
+
+/**
+ * @brief Prints SUBS (stack version of SUB)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany - 1. vybrany
+ * @note Stejná pravidla a chyby jako SUB
+ */
+void codegen_subs(void);
+
+/**
+ * @brief Prints MULS (stack version of MUL)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany * 1. vybrany
+ * @note Stejná pravidla a chyby jako MUL
+ */
+void codegen_muls(void);
+
+/**
+ * @brief Prints DIVS (stack version of DIV)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany/ 1. vybrany
+ * @note Stejná pravidla a chyby jako DIV
+ */
+void codegen_divs(void);
+
+/**
+ * @brief Prints IDIVS (stack version of IDIV)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany/ 1. vybrany
+ * @note Stejná pravidla a chyby jako IDIV
+ */
+void codegen_idivs(void);
+
+/**
+ * @brief Prints LTS (stack version of LT)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany < 1. vybrany (bool)
+ * @note Stejná pravidla a chyby jako LT
+ */
+void codegen_lts(void);
+
+/**
+ * @brief Prints GTS (stack version of GT)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany > 1. vybrany (bool)
+ * @note Stejná pravidla a chyby jako GT
+ */
+void codegen_gts(void);
+
+/**
+ * @brief Prints EQS (stack version of EQ)
+ *
+ * @note Vybere dve hodnoty ze zasobniku, ulozi 2. vybrany = 1. vybrany (bool)
+ * @note Stejná pravidla a chyby jako EQ
+ */
+void codegen_eqs(void);
+
+/**
+ * @brief Prints ANDS (stack version of AND)
+ *
+ * @note Vybere dve hodnoty (bool) ze zasobniku a ulozi jejich konjunkci
+ * @note Stejná pravidla a chyby jako AND
+ */
+void codegen_ands(void);
+
+/**
+ * @brief Prints ORS (stack version of OR)
+ *
+ * @note Vybere dve hodnoty (bool) ze zasobniku a ulozi jejich disjunkci
+ * @note Stejna pravidla a chyby jako OR.
+ */
+void codegen_ors(void);
+
+/**
+ * @brief Prints NOTS (stack version of NOT)
+ *
+ * @note Vybere hodnotu (bool) ze zasobniku a ulozi jeji negaci
+ * @note Stejna pravidla a chyby jako NOT.
+ */
+void codegen_nots(void);
+
+/**
+ * @brief Prints INT2FLOATS (stack version of INT2FLOAT)
+ *
+ * @note Vybere hodnotu typu int a ulozi ji prevedenou na float
+ * @note Stejna pravidla a chyby jako INT2FLOAT.
+ */
+void codegen_int2floats(void);
+
+/**
+ * @brief Prints FLOAT2INTS (stack version of FLOAT2INT)
+ *
+ * @note Vybere hodnotu typu float a ulozi ji prevedenou na int
+ * @note Stejna pravidla a chyby jako FLOAT2INT.
+ */
+void codegen_float2ints(void);
+
+/**
+ * @brief Prints INT2CHARS (stack version of INT2CHAR)
+ *
+ * @note Vybere hodnotu typu int a ulozi ji prevedenou na char
+ * @note Stejna pravidla a chyby jako INT2CHAR.
+ */
+void codegen_int2chars(void);
+
+/**
+ * @brief Prints STRI2INTS (stack version of STRI2INTS)
+ *
+ * @note Vybere hodnotu typu string a ulozi ji prevedenou na int
+ * @note Stejna pravidla a chyby jako STRI2INTS
+ */
+void codegen_stri2ints(void);
+
+/**
+ * @brief Prints FLOAT2STRS (stack version of FLOAT2STR)
+ *
+ * @note Vybere hodnotu typu float a ulozi ji prevedenou na string
+ * @note Stejna pravidla a chyby jako FLOAT2STR
+ */
+void codegen_float2strs(void);
+
+/**
+ * @brief Prints INT2STRS (stack version of INT2STRS)
+ *
+ * @note Vybere hodnotu typu int a ulozi ji prevedenou na string
+ * @note Stejna pravidla a chyby jako INT2STRS
+ */
+void codegen_int2strs(void);
+
 // ---------- Section 7.4.4 from spec
 /**
  * @brief Prints READ (reads value from sti)
  *
  * @param result Variable that recieves that value
  * @param type Type of the variable (int, bool, float, string)
+ *
+ * @note Typ se pise bez @ "int" ne "int@"
  */
 void codegen_read(const char *result, const char *type);
 
@@ -352,14 +489,14 @@ void codegen_getchar(const char *result, const char *source,
                      const char *position);
 
 /**
- * @brief Prints SETCHAR (result = source1 + source2, string concatenation)
+ * @brief Prints SETCHAR (replaces character at position in string)
  *
  * @param string Variable holding a string, modified in place
  * @param position Index of character replaced
  * @param source String whose first character is inserted
  *
- * @note Oba operandy musi byt typu string, jinak (error 53)
- * @note Index mimo retezec (error 58)
+ * @note Spravne typy operandu, jinak (error 53)
+ * @note Index mimo retezec, nebo prazdny retezec (error 58)
  */
 void codegen_setchar(const char *string, const char *position,
                      const char *source);
@@ -412,7 +549,7 @@ void codegen_arrayset(const char *array, const char *position,
 void codegen_type(const char *result, const char *source);
 
 /**
- * @brief Prints ISINT (result = true if it is int)
+ * @brief Prints ISINT (result = true if it is int or float ending with .00)
  *
  * @param result Variable that receives bool result
  * @param source Number to be tested
@@ -420,6 +557,25 @@ void codegen_type(const char *result, const char *source);
  * @note Operand typu float nebo int, jinak (error 53)
  */
 void codegen_isint(const char *result, const char *source);
+
+// ---------- Section 7.4.7 stack instructions
+/**
+ * @brief Prints TYPES (stack version of TYPE)
+ *
+ * @note Vybere jednu hodnotu ze zasobniku a ulozi retezec s nazvem jejiho typu
+ * @note Stejna pravidla jako TYPE.
+ */
+void codegen_types(void);
+
+/**
+ * @brief Prints ISINTS (stack version of ISINT)
+ *
+ * @note Vybere jednu hodnotu ze zasobniku a (bool) pokud je to int nebo float s
+ * .00
+ * @note Stejna pravidla jako ISINT.
+ */
+void codegen_isints(void);
+
 // ---------- Section 7.4.8 from spec
 /**
  * @brief Prints LABEL (defines a label at the currentposition in the code)
@@ -470,11 +626,33 @@ void codegen_jumpifneq(const char *label, const char *source1,
 /**
  * @brief Prints EXIT (exits interpreter with return code)
  *
- * @param result Return code (int, variable or const)
+ * @param code Return code (int, variable or const)
  *
  * @note Hodnota mimo 0-49 (error 57)
  */
-void codegen_exit(const char *result);
+void codegen_exit(const char *code);
+
+// ---------- Section 7.4.8 stack instructions
+/**
+ * @brief Prints JUMPIFEQS (stack version of JUMPIFEQ)
+ *
+ * @param label Name of the target label
+ *
+ * @note Vybere dve hodnoty ze zasobniku a skoci, pokud se rovnaji
+ * @note Stejna pravidla a chyby jako JUMPIFEQ.
+ */
+void codegen_jumpifeqs(const char *label);
+
+/**
+ * @brief Prints JUMPIFNEQS (stack version of JUMPIFNEQ)
+ *
+ * @param label Name of the target label
+ *
+ * @note Vybere dve hodnoty ze zasobniku a skoci, pokud se nerovnaji
+ * @note Stejna pravidla a chyby jako JUMPIFNEQ.
+ */
+void codegen_jumpifneqs(const char *label);
+
 // ---------- Section 7.4.9 from spec
 
 /**
@@ -488,4 +666,65 @@ void codegen_break(void);
  * @param symbol Value to print
  */
 void codegen_dprint(const char *symbol);
+
+// ---------- Unique label id generator
+/**
+ * @brief Returns new label id (int)
+ *
+ * @return Id unique within the whole program
+ */
+int codegen_new_label_id(void);
+
+// ---------- String literal escaping
+/**
+ * @brief Prints a string in IFJcode26 escaped form
+ *
+ * @param string String value
+ *
+ */
+void codegen_print_escaped_string(const char *string);
+
+// ---------- Constant formating
+/**
+ * @brief Builds integer constant operand "int@integer"
+ *
+ * @param value Integer value
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_int(long long value);
+
+/**
+ * @brief Builds bool constant operand "bool@true/false"
+ *
+ * @param value Boolean value
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_bool(bool value);
+
+/**
+ * @brief Builds float constant operand "float@0x1.26666p+0"
+ *
+ * @param value Floating point value
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_float(double value);
+
+/**
+ * @brief Builds the nil constant operand "nil@nil"
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_nil(void);
+
+/**
+ * @brief Builds string constant operand "string@ahoj\032svete"
+ *
+ * @param string String value
+ *
+ * @return Newly allocated string, or NULL on failure. Caller must free() it.
+ */
+char *codegen_const_string(const char *string);
 #endif
