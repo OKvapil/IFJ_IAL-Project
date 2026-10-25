@@ -61,3 +61,22 @@ typedef struct SymTable_t {
   SymScope *current_scope; /**< A pointer to the node of the current scope. */
   int var_counter;         /**< The number of defined variables. */
 } SymTable;
+
+/**
+ * @brief Initializes the symbol table.
+ *
+ * Allocates space for the symbol table, creates the global scope,
+ * and sets var_counter to 0.
+ *
+ * @return A pointer to the symbol table, NULL if initialization failed.
+ */
+SymTable *st_init(void);
+
+/**
+ * @brief Frees the symbol table and its contents.
+ *
+ * Also closes every open scope and frees all symbols.
+ *
+ * @param symtable The symbol table to be freed.
+ */
+void st_dispose(SymTable *symtable);
