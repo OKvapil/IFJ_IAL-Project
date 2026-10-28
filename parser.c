@@ -96,7 +96,21 @@ static void parse_expression(void) {
 }
 
 static void parse_block(void) {
-  // Implement block parsing logic here
+  check_token(TOKEN_EOL);
+  check_token(TOKEN_INDENT);
+
+  while (current_token.type != TOKEN_DEDENT) {
+    switch (current_token.type) {
+    case TOKEN_EOL:
+      check_token(TOKEN_EOL);
+      break;
+    default:
+      parse_statement();
+      break;
+    }
+  }
+
+  check_token(TOKEN_DEDENT);
 }
 
 static void parse_type(void) {
@@ -106,9 +120,6 @@ static void parse_type(void) {
     break;
   case TOKEN_KW_STRING:
     check_token(TOKEN_KW_STRING);
-    break;
-  case TOKEN_KW_UNIT:
-    check_token(TOKEN_KW_UNIT);
     break;
   case TOKEN_KW_DOUBLE:
     check_token(TOKEN_KW_DOUBLE);
