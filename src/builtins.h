@@ -61,4 +61,37 @@ void builtin_readdouble(const char *result);
  * @param type Type of the value
  */
 void builtin_tostr(const char *result, const char *source, BuiltinType type);
+
+/**
+ * @brief Generates toInt(value)
+ *
+ * @param result Variable that receives the int value
+ * @param value Double operand
+ */
+void builtin_toint(const char *result, const char *value);
+
+/**
+ * @brief Generates strLength(str)
+ *
+ * @param result Variable that receives the length (int)
+ * @param str String operand
+ */
+void builtin_strlength(const char *result, const char *str);
+
+/**
+ * @brief Generates definition of the function
+ *
+ */
+void builtin_substr_definition(void);
+
+/**
+ * @brief Generates a call of subStr(value, start, end)
+ *
+ * @param result Variable that receives the substring
+ * @param value Source string
+ * @param start Start index
+ * @param end End index
+ */
+void builtin_substr_call(const char *result, const char *value,
+                         const char *start, const char *end);
 #endif
