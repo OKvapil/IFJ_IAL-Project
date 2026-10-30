@@ -19,7 +19,7 @@ typedef enum {
   BUILTIN_TYPE_INT,
   BUILTIN_TYPE_DOUBLE,
   BUILTIN_TYPE_STRING,
-  BUILTIN_TYPE_UNIT,
+  BUILTIN_TYPE_UNIT
 } BuiltinType;
 
 /**
@@ -80,7 +80,6 @@ void builtin_strlength(const char *result, const char *str);
 
 /**
  * @brief Generates definition of the function
- *
  */
 void builtin_substr_definition(void);
 
@@ -94,4 +93,27 @@ void builtin_substr_definition(void);
  */
 void builtin_substr_call(const char *result, const char *value,
                          const char *start, const char *end);
+
+/**
+ * @brief Generates a definition of the function
+ */
+void builtin_ord_definition(void);
+
+/**
+ * @brief Generates a call of subStr(value, start, end)
+ *
+ * @param result Variable that receives the ASCII code
+ * @param string Source string
+ * @param index Index of the character
+ */
+void builtin_ord_call(const char *result, const char *string,
+                      const char *index);
+
+/**
+ * @brief Generates chr(value)
+ *
+ * @param result Variable that receives the one character string
+ * @param value Integer ASCII code
+ */
+void builtin_chr(const char *result, const char *value);
 #endif

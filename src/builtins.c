@@ -116,3 +116,51 @@ void builtin_substr_call(const char *result, const char *value,
   codegen_call("$builtin_substr");
   codegen_pops(result);
 }
+
+void builtin_ord_definition(void) {
+  codegen_label("$builtin_ord");
+  codegen_createframe();
+  codegen_pushframe();
+  codegen_defvar("LF@string");
+  codegen_defvar("LF@index");
+  codegen_defvar("LF@cond");
+  codegen_defvar("LF@cond_second");
+  codegen_defvar("LF@len");
+  codegen_defvar("LF@result");
+  codegen_pops("LF@index");
+  codegen_pops("LF@string");
+  codegen_strlen("LF@len", "LF@string");
+
+  // index < 0
+  codegen_lt("LF@cond", "LF@index", "int@0");
+  codegen_jumpifeq("$builtin_ord_error", "LF@cond", "bool@true");
+
+  // index >= len
+  codegen_gt("LF@cond", "LF@index", "LF@len");
+  codegen_eq("LF@cond_second", "LF@index", "LF@len");
+  codegen_or("LF@cond", "LF@cond", "LF@cond_second");
+  codegen_jumpifeq("$builtin_ord_error", "LF@cond", "bool@true");
+
+  // valid index
+  codegen_stri2int("LF@result", "LF@string", "LF@index");
+  codegen_pushs("LF@result");
+  codegen_popframe();
+  codegen_return();
+
+  // invalid index
+  codegen_label("$builtin_ord_error");
+  codegen_pushs("int@-1");
+  codegen_popframe();
+  codegen_return();
+}
+void builtin_ord_call(const char *result, const char *string,
+                      const char *index) {
+  codegen_pushs(string);
+  codegen_pushs(index);
+  codegen_call("$builtin_ord");
+  codegen_pops(result);
+}
+
+void builtin_chr(const char *result, const char *value) {
+  codegen_int2char(result, value);
+}
