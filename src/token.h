@@ -5,7 +5,7 @@
 #include <stddef.h>
 
 typedef enum {
-    /* --- Control and Layout Tokens --- */
+/* --- Control and Layout Tokens --- */
     TOKEN_EOF,
     TOKEN_EOL,
     TOKEN_INDENT,
