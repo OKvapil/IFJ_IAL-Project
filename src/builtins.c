@@ -9,7 +9,7 @@
 
 #include "builtins.h"
 #include "codegen.h"
-#include <stdbool.h>
+#include <stdio.h>
 
 void builtin_print(const char *value, BuiltinType type) {
   if (type == BUILTIN_TYPE_UNIT) {
@@ -19,11 +19,34 @@ void builtin_print(const char *value, BuiltinType type) {
   }
 }
 
+/**
+ * @brief Generataes READ taht replaces nil with default value
+ * @param result Variable that receives the value
+ * @param type Type to read without @
+ * @param default_value Constant used instead of nil
+ *
+ * @note Kazde volani generuje vlastni navesti, takze funkci lze vyuzivat
+ * opakovane
+ */
+static void read_with_default(const char *result, const char *type,
+                              const char *default_value) {
+  char label[32];
+  snprintf(label, sizeof label, "$L%d_read_ok", codegen_new_label_id());
+  codegen_read(result, type);
+  codegen_jumpifneq(label, result, "nil@nil");
+  codegen_move(result, default_value);
+  codegen_label(label);
+}
+
 void builtin_readline(const char *result) { codegen_read(result, "string"); }
 
-void builtin_readint(const char *result) { codegen_read(result, "int"); }
+void builtin_readint(const char *result) {
+  read_with_default(result, "int", "int@0");
+}
 
-void builtin_readdouble(const char *result) { codegen_read(result, "float"); }
+void builtin_readdouble(const char *result) {
+  read_with_default(result, "float", "float@0x0p+0");
+}
 
 void builtin_tostr(const char *result, const char *source, BuiltinType type) {
   switch (type) {
@@ -37,7 +60,7 @@ void builtin_tostr(const char *result, const char *source, BuiltinType type) {
     codegen_move(result, source);
     break;
   case BUILTIN_TYPE_UNIT:
-    codegen_move(result, "()");
+    codegen_move(result, "string@()");
     break;
   }
 }

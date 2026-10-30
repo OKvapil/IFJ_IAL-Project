@@ -43,6 +43,8 @@ void builtin_readline(const char *result);
  * @brief Generates readInt()
  *
  * @param result Variable that receives the int
+ * @note Pri chybnem formatu, preteceni nebo EOF Vraci 0. Interpret ulozi nil,
+ * proto se po READ nil nahradi hodnotou int@0
  */
 void builtin_readint(const char *result);
 
@@ -50,6 +52,8 @@ void builtin_readint(const char *result);
  * @brief Generates readDouble()
  *
  * @param result Variable that receives the float
+ * @note Pri chybnem formatu, preteceni nebo EOF Vraci 0.0. Interpret ulozi nil,
+ * proto se po READ nil nahradi hodnotou float@0x0p+0
  */
 void builtin_readdouble(const char *result);
 
