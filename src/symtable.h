@@ -15,6 +15,7 @@ typedef enum DataType_t {
   TYPE_INT,
   TYPE_DOUBLE,
   TYPE_STRING,
+  TYPE_BOOL,
   TYPE_UNIT,
   TYPE_UNKNOWN
 } DataType;
@@ -80,3 +81,25 @@ SymTable *st_init(void);
  * @param symtable The symbol table to be freed.
  */
 void st_dispose(SymTable *symtable);
+
+/**
+ * @brief Enters an inner scope of the code.
+ *
+ * Allocates space for a new scope.
+ * The new scope becomes the current one.
+ *
+ * @param symtable The symbol table in which to enter a deeper scope.
+ * @return 0 if successful, -1 if allocation error.
+ */
+int st_enter_scope(SymTable *symtable);
+
+/**
+ * @brief Exits to the outer scope of the code.
+ *
+ * Frees the scope being left together with its symbols.
+ * If it's the global scope, the symbol table is unchanged.
+ *
+ * @param symtable The symbol table in which to exit to the outer scope.
+ * @return 0 if successful, -1 if it's the global scope.
+ */
+int st_exit_scope(SymTable *symtable);
