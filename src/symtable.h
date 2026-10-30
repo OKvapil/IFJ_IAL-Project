@@ -21,6 +21,16 @@ typedef enum DataType_t {
 } DataType;
 
 /**
+ * @brief Enum defining the return values of the variable/function declaration
+ * functions.
+ */
+typedef enum DeclarationCode_t {
+  DECL_OK,
+  DECL_REDEF,
+  DECL_ALLOC_FAIL
+} DeclarationCode;
+
+/**
  * @brief A structure for storing a symbol.
  *
  * The name and both parameter arrays are freed by symtable.
@@ -89,7 +99,7 @@ void st_dispose(SymTable *symtable);
  * The new scope becomes the current one.
  *
  * @param symtable The symbol table in which to enter a deeper scope.
- * @return 0 if successful, -1 if allocation error.
+ * @return 0 if successful, -1 if allocation failure.
  */
 int st_enter_scope(SymTable *symtable);
 
@@ -103,3 +113,45 @@ int st_enter_scope(SymTable *symtable);
  * @return 0 if successful, -1 if it's the global scope.
  */
 int st_exit_scope(SymTable *symtable);
+
+/**
+ * @brief Declares a variable symbol.
+ *
+ * Declares the variable in the current scope (shadowing enabled), copies the
+ * name, takes the next id from the counter and increments it. new_symbol is
+ * written only on success and belongs to symtable. new_symbol can be NULL if
+ * the caller doesn't need it.
+ *
+ * @param symtable The symbol table in which the variable goes.
+ * @param name The name of the variable.
+ * @param type The data type of the variable.
+ * @param modifiable Is the variable modifiable.
+ * @param new_symbol The newly created variable symbol.
+ * @return DECL_OK if successful, DECL_REDEF if redefinition, DECL_ALLOC_FAIL if
+ * allocation failure.
+ */
+DeclarationCode st_declare_var(SymTable *symtable, const char *name,
+                               DataType type, bool modifiable,
+                               Symbol **new_symbol);
+
+/**
+ * @brief Declares a function symbol.
+ *
+ * Declares the function in the global scope.
+ * type may be TYPE_UNKNOWN when the return type is inferred.
+ * Parameter arrays are copied, caller keeps ownership.
+ *
+ * @param symtable The symbol table in which the function goes.
+ * @param name The name of the function.
+ * @param type The return type of the function.
+ * @param param_count The number of parameters of the function.
+ * @param param_types An array of the parameter data types.
+ * @param param_names An array of the parameter names.
+ * @param new_symbol The newly created function symbol.
+ * @return DECL_OK if successful, DECL_REDEF if redefinition, DECL_ALLOC_FAIL if
+ * allocation failure.
+ */
+DeclarationCode st_declare_fun(SymTable *symtable, const char *name,
+                               DataType type, int param_count,
+                               const DataType *param_types,
+                               const char **param_names, Symbol **new_symbol);
