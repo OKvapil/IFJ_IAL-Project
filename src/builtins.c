@@ -11,8 +11,8 @@
 #include "codegen.h"
 #include <stdio.h>
 
-void builtin_print(const char *value, BuiltinType type) {
-  if (type == BUILTIN_TYPE_UNIT) {
+void builtin_print(const char *value, DataType type) {
+  if (type == TYPE_UNIT) {
     codegen_write("string@()");
   } else {
     codegen_write(value);
@@ -48,20 +48,37 @@ void builtin_readdouble(const char *result) {
   read_with_default(result, "float", "float@0x0p+0");
 }
 
-void builtin_tostr(const char *result, const char *source, BuiltinType type) {
+void builtin_tostr(const char *result, const char *source, DataType type) {
   switch (type) {
-  case BUILTIN_TYPE_INT:
+  case TYPE_INT:
     codegen_int2str(result, source);
     break;
-  case BUILTIN_TYPE_DOUBLE:
+  case TYPE_DOUBLE:
     codegen_float2str(result, source);
     break;
-  case BUILTIN_TYPE_STRING:
+  case TYPE_STRING:
     codegen_move(result, source);
     break;
-  case BUILTIN_TYPE_UNIT:
+  case TYPE_UNIT:
     codegen_move(result, "string@()");
     break;
+  case TYPE_UNKNOWN:
+    break;
+  case TYPE_BOOL: {
+    int id = codegen_new_label_id();
+    char label_true[32];
+    char label_end[32];
+    snprintf(label_true, sizeof label_true, "$L%d_tostr_true", id);
+    snprintf(label_end, sizeof label_end, "$L%d_tostr_end", id);
+
+    codegen_jumpifeq(label_true, source, "bool@true");
+    codegen_move(result, "string@false");
+    codegen_jump(label_end);
+    codegen_label(label_true);
+    codegen_move(result, "string@true");
+    codegen_label(label_end);
+    break;
+  }
   }
 }
 
@@ -186,4 +203,8 @@ void builtin_ord_call(const char *result, const char *string,
 
 void builtin_chr(const char *result, const char *value) {
   codegen_int2char(result, value);
+}
+
+void builtin_readbool(const char *result) {
+  read_with_default(result, "bool", "bool@false");
 }
