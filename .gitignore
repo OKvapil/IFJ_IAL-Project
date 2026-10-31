@@ -5,6 +5,10 @@
 # CLion build folders
 cmake-build-*/
 
+# VSCode build
+.vscode/
+
 # Compiled output
 *.o
 *.out
+
