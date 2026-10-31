@@ -97,27 +97,39 @@ static void scanner_buffer_free(scanner_buffer_t *buf) {
 }
 
 // ---------- DFA states
-typedef enum {
-    STATE_START,              // Starting state, waiting for the first char
+typedef enum scanner_state_e {
+  STATE_START, // Initial state
 
-    /* --- Keywords and Identifiers --- */
-    STATE_KW_IDENTIFIER,      // Final/Accumulation state: keywords or identifiers
-    STATE_UNDERSCORE,         // Transition state: read '_', waiting for alnum or '_'
+  /* --- Keywords and Identifiers --- */
+  STATE_KW_IDENTIFIER, // Final: keyword or id
+  STATE_UNDERSCORE,    // Wait: alnum or '_' after '_'
 
-    /* --- Numbers (Integers and Floating-point) --- */
-    STATE_INT,                // Final/Accumulation state: integer sequence
-    STATE_INT_UNDERSCORE,     // Transition state: waiting for digit after '_'
-    STATE_EXPONENT,           // Transition state: read 'e' or 'E'
-    STATE_DOUBLE,             // Final/Accumulation state: floating-point sequence
-    STATE_DOUBLE_UNDERSCORE,  // Transition state: waiting for digit after '_' in double
-    STATE_NUM_DOT,            // Transition state: read '.' within a number
-    STATE_D_SUFIX,            // Final state: specific suffix for double (if IFJ26 requires it)
-    STATE_SIGN,               // Transition state: read '+' or '-' after exponent
-    STATE_EXPONENT_FINAL,     // Final/Accumulation state: digits after exponent
-    STATE_EXP_UNDERSCORE,     // Transition state: waiting for digit after '_' in exponent
-    STATE_ZERO,               // Final state: single '0'
-    STATE_DOT_CHECK,          // Transition state: waiting to see if dot belongs to number
-    STATE_DOT                 // Final state: standalone dot (e.g. for object access, if applicable)
+  /* --- Numbers --- */
+  STATE_INT,               // Final: integer
+  STATE_INT_UNDERSCORE,    // Wait: digit after '_'
+  STATE_EXPONENT,          // Wait: 'e' or 'E'
+  STATE_DOUBLE,            // Final: float sequence
+  STATE_DOUBLE_UNDERSCORE, // Wait: digit after '_' in double
+  STATE_NUM_DOT,           // Wait: '.' in number
+  STATE_D_SUFIX,           // Final: double suffix
+  STATE_SIGN,              // Wait: '+' or '-' in exp
+  STATE_EXPONENT_FINAL,    // Final: digits after exp
+  STATE_EXP_UNDERSCORE,    // Wait: digit after '_' in exp
+  STATE_ZERO,              // Final: standalone '0'
+  STATE_DOT_CHECK,         // Wait: check if dot is number
+  STATE_DOT,               // Final: standalone dot
+
+  /* --- Strings --- */
+  STATE_QUOTE_1,       // Wait: 1st '"'
+  STATE_STRING,        // In string literal
+  STATE_STRING_ESCAPE, // Wait: '\' escape
+  STATE_STRING_END,    // Final: closed string
+  STATE_QUOTE_2,       // Wait/Final: 2nd '"'
+  STATE_MSTR,          // In multi-line (""")
+  STATE_MSTR_END_1,    // Wait: 1st '"' of """
+  STATE_MSTR_END_2,    // Wait: 2nd '"' of """
+  STATE_MSTR_END_3,    // Final: closed """
+
 } scanner_state_t;
 
 void scanner_init(FILE *source) {
