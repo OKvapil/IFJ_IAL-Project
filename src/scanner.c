@@ -130,6 +130,43 @@ typedef enum scanner_state_e {
   STATE_MSTR_END_2,    // Wait: 2nd '"' of """
   STATE_MSTR_END_3,    // Final: closed """
 
+  /* --- Operators and Delimiters --- */
+  STATE_ASSIGN,           // Wait: '='
+  STATE_ASSIGN_FINAL,     // Final: '=' (if not '==')
+  STATE_EQUAL,            // Final: '=='
+  
+  STATE_LESS_THAN,        // Wait: '<'
+  STATE_LESS_THAN_FINAL,  // Final: '<' (if not '<=')
+  STATE_LESS_THAN_EQUAL,  // Final: '<='
+  
+  STATE_GREATER_THAN,       // Wait: '>'
+  STATE_GREATER_THAN_FINAL, // Final: '>' (if not '>=')
+  STATE_GREATER_EQUAL,      // Final: '>='
+  
+  STATE_PLUS,             // Final: '+'
+  STATE_MINUS,            // Final: '-'
+  STATE_MULTIPLY,         // Final: '*'
+  
+  STATE_NOT,              // Wait: '!'
+  STATE_NOT_EQUAL,        // Final: '!='
+  
+  /* --- Division and Comments --- */
+  STATE_SLASH,            // Wait: '/'
+  STATE_DIVIDE,           // Final: '/' (if not comment)
+  STATE_COM_LINE,         // In line comment
+  STATE_COM_BLOCK,        // In block comment
+  STATE_COM_BLOCK_STAR,   // Wait: '*' in block comment
+  
+  /* --- Punctuation and Brackets --- */
+  STATE_SEMICOLON,        // Final: ';'
+  STATE_COLON,            // Final: ':'
+  STATE_COMMA,            // Final: ','
+  STATE_LPAR,             // Final: '('
+  STATE_RPAR,             // Final: ')'
+
+  /* --- End of File --- */
+  STATE_EOF               // Final: End of File
+
 } scanner_state_t;
 
 void scanner_init(FILE *source) {
