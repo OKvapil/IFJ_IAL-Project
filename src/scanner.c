@@ -40,6 +40,7 @@ static size_t current_line = 1;
  * ============================================================================
  */
 
+// ---------- Dynamic buffer
 typedef struct {
   char *data;
   size_t length;
@@ -95,6 +96,30 @@ static void scanner_buffer_free(scanner_buffer_t *buf) {
   buf->capacity = 0;
 }
 
+// ---------- DFA states
+typedef enum {
+    STATE_START,              // Starting state, waiting for the first char
+
+    /* --- Keywords and Identifiers --- */
+    STATE_KW_IDENTIFIER,      // Final/Accumulation state: keywords or identifiers
+    STATE_UNDERSCORE,         // Transition state: read '_', waiting for alnum or '_'
+
+    /* --- Numbers (Integers and Floating-point) --- */
+    STATE_INT,                // Final/Accumulation state: integer sequence
+    STATE_INT_UNDERSCORE,     // Transition state: waiting for digit after '_'
+    STATE_EXPONENT,           // Transition state: read 'e' or 'E'
+    STATE_DOUBLE,             // Final/Accumulation state: floating-point sequence
+    STATE_DOUBLE_UNDERSCORE,  // Transition state: waiting for digit after '_' in double
+    STATE_NUM_DOT,            // Transition state: read '.' within a number
+    STATE_D_SUFIX,            // Final state: specific suffix for double (if IFJ26 requires it)
+    STATE_SIGN,               // Transition state: read '+' or '-' after exponent
+    STATE_EXPONENT_FINAL,     // Final/Accumulation state: digits after exponent
+    STATE_EXP_UNDERSCORE,     // Transition state: waiting for digit after '_' in exponent
+    STATE_ZERO,               // Final state: single '0'
+    STATE_DOT_CHECK,          // Transition state: waiting to see if dot belongs to number
+    STATE_DOT                 // Final state: standalone dot (e.g. for object access, if applicable)
+} scanner_state_t;
+
 void scanner_init(FILE *source) {
   if (source != NULL) {
     source_file = source;
@@ -105,9 +130,21 @@ void scanner_init(FILE *source) {
   scanner_buffer_init(&s_buf);
 }
 
-int scanner_get_next_token(Token *token) {}
-
 void scanner_cleanup(void) {
   scanner_buffer_free(&s_buf);
   source_file = NULL;
+}
+
+int scanner_get_next_token(Token *token) {
+
+  // check if token is passed right from parser
+  if (token == NULL) {
+    fprintf(stderr, "Internal error: Null pointer passed as token.\n");
+    return (ERR_INTERNAL);
+  }
+
+  // cleanup before next token
+  scanner_buffer_clear(&s_buf);
+
+  token->line = current_line;
 }
