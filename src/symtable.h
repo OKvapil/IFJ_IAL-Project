@@ -138,8 +138,10 @@ DeclarationCode st_declare_var(SymTable *symtable, const char *name,
  * @brief Declares a function symbol.
  *
  * Declares the function in the global scope.
+ * new_symbol is written only on success and belongs to symtable
  * type may be TYPE_UNKNOWN when the return type is inferred.
- * Parameter arrays are copied, caller keeps ownership.
+ * Parameter arrays and names inside param_names are copied, caller keeps
+ * ownership.
  *
  * @param symtable The symbol table in which the function goes.
  * @param name The name of the function.
@@ -154,4 +156,18 @@ DeclarationCode st_declare_var(SymTable *symtable, const char *name,
 DeclarationCode st_declare_fun(SymTable *symtable, const char *name,
                                DataType type, int param_count,
                                const DataType *param_types,
-                               const char **param_names, Symbol **new_symbol);
+                               const char *const *param_names,
+                               Symbol **new_symbol);
+
+/**
+ * @brief Looks up a symbol in the symbol table.
+ *
+ * The search starts in the current scope and moves outward.
+ * Variables and functions share one namespace, kind has to be checked.
+ * The returned symbol belongs to symtable and is freed on scope exit.
+ *
+ * @param symtable The symbol table to search in.
+ * @param name The name of the symbol to search for.
+ * @return A pointer to the found symbol, NULL if not found.
+ */
+Symbol *st_lookup(const SymTable *symtable, const char *name);
