@@ -50,6 +50,12 @@ static OperatorsTable token_to_index(TokenType type) {
     break;
   case TOKEN_INT_LIT:
     return ID;
+  case TOKEN_FLOAT_LIT:
+    return ID;
+  case TOKEN_STRING_LIT:
+    return ID;
+  case TOKEN_IDENTIFIER:
+    return ID;
   case TOKEN_COMMA:
     return COMMA;
   case TOKEN_LT:
@@ -107,8 +113,8 @@ static StackNode *stack_top_terminal(Stack *s) {
   while (pos_pointer != NULL) {
     if (pos_pointer->type == SYMBOL_TERMINAL) {
       return pos_pointer;
-      pos_pointer = pos_pointer->next;
     }
+    pos_pointer = pos_pointer->next;
   }
   return NULL;
 }
@@ -166,3 +172,44 @@ static const Operations precedence_table[TAB_MAX][TAB_MAX] = {
     /* $ */ {S, S, S, S, S, S, S, X, S, X, X}};
 // e = equality operators
 // r = relation operators
+
+int parse_expression(Token *token) {
+  Stack stack;
+  init_stack(&stack);
+  push_stack(&stack, SYMBOL_TERMINAL, DOLLAR);
+  Token token;
+
+  while (true) {
+    StackNode *upper = stack_top_terminal(&stack);
+    OperatorsTable a = upper->operator;
+    OperatorsTable b = token_to_index(token->type);
+    if (a == DOLLAR && b == DOLLAR)
+      break;
+    switch (precedence_table[a][b]) {
+    case S:
+      stack_push_after_top_terminal(&stack);
+      push_stack(&stack, SYMBOL_TERMINAL, b);
+      int scanner_get_next_token(token);
+      break;
+    case R:
+      reduce();
+      break;
+    case E:
+      push_stack(&stack, SYMBOL_TERMINAL, b);
+      int scanner_res = scanner_get_next_token(token);
+      if (scanner_res == 1) {
+        stack_free(&stack);
+        return
+      }
+      break;
+    case X:
+      /* code */
+      break;
+
+    default:
+      break;
+
+      return 0;
+    }
+  }
+}
