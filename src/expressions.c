@@ -1,3 +1,13 @@
+/**
+ * @file parser.c
+ * @brief IFJcode26 parser expressions functions (implementation)
+ *
+ * IFJ/IAL project - IFJ26 compiler
+ *
+ * @author Petr Nášel (xnaselp00)
+ */
+
+
 #include "scanner.h"
 #include "token.h"
 #include <stdbool.h>
