@@ -91,7 +91,7 @@ static void init_stack(Stack *s) { s->top = NULL; }
 static void push_stack(Stack *s, SymbolType Type, OperatorsTable operator) {
   StackNode *new_node = malloc(sizeof(StackNode));
   if (new_node == NULL) {
-    return;
+    return 99;
   }
 
   new_node->type = Type;
@@ -173,43 +173,58 @@ static const Operations precedence_table[TAB_MAX][TAB_MAX] = {
 // e = equality operators
 // r = relation operators
 
+static int move_next_token(Token *token) {
+  token_clear(token);
+  return scanner_get_next_token(token);
+}
+
 int parse_expression(Token *token) {
   Stack stack;
   init_stack(&stack);
   push_stack(&stack, SYMBOL_TERMINAL, DOLLAR);
-  Token token;
-
   while (true) {
     StackNode *upper = stack_top_terminal(&stack);
     OperatorsTable a = upper->operator;
     OperatorsTable b = token_to_index(token->type);
     if (a == DOLLAR && b == DOLLAR)
+
       break;
     switch (precedence_table[a][b]) {
     case S:
       stack_push_after_top_terminal(&stack);
       push_stack(&stack, SYMBOL_TERMINAL, b);
-      int scanner_get_next_token(token);
+      if (move_next_token(token) == 1) {
+        stack_free(&stack);
+        return 1;
+      }
       break;
     case R:
-      reduce();
+      if (reduce(&stack) != 0) {
+        stack_free(&stack);
+        return 2;
+      }
       break;
     case E:
       push_stack(&stack, SYMBOL_TERMINAL, b);
-      int scanner_res = scanner_get_next_token(token);
-      if (scanner_res == 1) {
+      if (move_next_token(token) == 1) {
         stack_free(&stack);
-        return
+        return 1;
       }
       break;
     case X:
-      /* code */
-      break;
+      stack_free(&stack);
+      return 2;
 
-    default:
       break;
-
-      return 0;
     }
+  }
+  if (stack.top != NULL && stack.top->type == SYMBOL_NONTERMINAL &&
+      stack.top->next != NULL && stack.top->next->type == SYMBOL_TERMINAL &&
+      stack.top->next->operator== DOLLAR && stack.top->next->next == NULL) {
+    stack_free(&stack);
+    return 0;
+  } else {
+    stack_free(&stack);
+    return 2;
   }
 }
