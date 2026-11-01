@@ -20,6 +20,8 @@
 
 static FILE *source_file = NULL;
 static size_t current_line = 1;
+static int bracket_depth = 0;
+static bool at_line_start = true;
 
 /* ============================================================================
  * Authorship Note:
@@ -131,41 +133,49 @@ typedef enum scanner_state_e {
   STATE_MSTR_END_3,    // Final: closed """
 
   /* --- Operators and Delimiters --- */
-  STATE_ASSIGN,           // Wait: '='
-  STATE_ASSIGN_FINAL,     // Final: '=' (if not '==')
-  STATE_EQUAL,            // Final: '=='
-  
-  STATE_LESS_THAN,        // Wait: '<'
-  STATE_LESS_THAN_FINAL,  // Final: '<' (if not '<=')
-  STATE_LESS_THAN_EQUAL,  // Final: '<='
-  
+  STATE_ASSIGN,       // Wait: '='
+  STATE_ASSIGN_FINAL, // Final: '=' (if not '==')
+  STATE_EQUAL,        // Final: '=='
+
+  STATE_LESS_THAN,       // Wait: '<'
+  STATE_LESS_THAN_FINAL, // Final: '<' (if not '<=')
+  STATE_LESS_THAN_EQUAL, // Final: '<='
+
   STATE_GREATER_THAN,       // Wait: '>'
   STATE_GREATER_THAN_FINAL, // Final: '>' (if not '>=')
   STATE_GREATER_EQUAL,      // Final: '>='
-  
-  STATE_PLUS,             // Final: '+'
-  STATE_MINUS,            // Final: '-'
-  STATE_MULTIPLY,         // Final: '*'
-  
-  STATE_NOT,              // Wait: '!'
-  STATE_NOT_EQUAL,        // Final: '!='
-  
-  /* --- Division and Comments --- */
-  STATE_SLASH,            // Wait: '/'
-  STATE_DIVIDE,           // Final: '/' (if not comment)
-  STATE_COM_LINE,         // In line comment
-  STATE_COM_BLOCK,        // In block comment
-  STATE_COM_BLOCK_STAR,   // Wait: '*' in block comment
-  
-  /* --- Punctuation and Brackets --- */
-  STATE_SEMICOLON,        // Final: ';'
-  STATE_COLON,            // Final: ':'
-  STATE_COMMA,            // Final: ','
-  STATE_LPAR,             // Final: '('
-  STATE_RPAR,             // Final: ')'
 
-  /* --- End of File --- */
-  STATE_EOF               // Final: End of File
+  STATE_PLUS,     // Final: '+'
+  STATE_MINUS,    // Final: '-'
+  STATE_MULTIPLY, // Final: '*'
+
+  STATE_NOT,       // Wait: '!'
+  STATE_NOT_EQUAL, // Final: '!='
+
+  /* --- Division and Comments --- */
+  STATE_SLASH,          // Wait: '/'
+  STATE_DIVIDE,         // Final: '/' (if not comment)
+  STATE_COM_LINE,       // In line comment
+  STATE_COM_BLOCK,      // In block comment
+  STATE_COM_BLOCK_STAR, // Wait: '*' in block comment
+
+  /* --- Punctuation and Brackets --- */
+  STATE_SEMICOLON, // Final: ';'
+  STATE_COLON,     // Final: ':'
+  STATE_COMMA,     // Final: ','
+  STATE_LPAR,      // Final: '('
+  STATE_RPAR,      // Final: ')'
+
+  /* --- Annotation main --- */
+  STATE_ANNOT,
+  STATE_ANNOT_M,
+  STATE_ANNOT_MA,
+  STATE_ANNOT_MAI,
+  STATE_ANNOT_MAIN,
+
+  /* --- End of File/Line --- */
+  STATE_EOL, // Final: End of line
+  STATE_EOF, // Final: End of File
 
 } scanner_state_t;
 
@@ -195,5 +205,117 @@ int scanner_get_next_token(Token *token) {
   // cleanup before next token
   scanner_buffer_clear(&s_buf);
 
-  token->line = current_line;
+  scanner_state_t state = STATE_START;
+  int c;
+
+  while (true) {
+    c = fgetc(source_file);
+
+    switch (state) {
+    case STATE_START:
+      // TODO: doplneni pocitani mezer EOL
+
+      /* --- IDENTIFIERS AND KEYWORDS --- */
+      if (isalpha(c) || c == '_') {
+        at_line_start = false;
+        scanner_buffer_append(&s_buf, c);
+        if (c == '_')
+          state = STATE_UNDERSCORE;
+        else
+          state = STATE_KW_IDENTIFIER;
+      }
+
+      /* --- NUMBERS AND DOT --- */
+      else if (isdigit(c) || c == '.') {
+        at_line_start = false;
+        scanner_buffer_append(&s_buf, c);
+        if (c == '.')
+          state = STATE_DOT_CHECK;
+        else if (c == '0')
+          state = STATE_ZERO;
+        else
+          state = STATE_INT;
+      }
+
+      /* --- STRINGS --- */
+      else if (c == '"') {
+        at_line_start = false;
+        state = STATE_QUOTE_1;
+      }
+
+      /* --- Operators --- */
+      else if (c == '=') {
+        at_line_start = false;
+        state = STATE_ASSIGN;
+      }
+      else if (c == '+') {
+        at_line_start = false;
+        state = STATE_PLUS;
+      }
+      else if (c == '-') {
+        at_line_start = false;
+        state = STATE_MINUS;
+      }
+      else if (c == '*') {
+        at_line_start = false;
+        state = STATE_MULTIPLY;
+      }
+      else if (c == '>') {
+        at_line_start = false;
+        state = STATE_GREATER_THAN;
+      }
+      else if (c == '<') {
+        at_line_start = false;
+        state = STATE_LESS_THAN;
+      }
+      else if (c == '!') {
+        at_line_start = false;
+        state = STATE_NOT;
+      }
+      else if (c == '/') {
+        at_line_start = false;
+        state = STATE_SLASH;
+      }
+
+      /* --- PUNCTUATION AND BRACKETS --- */
+      else if (c == ';') {
+        at_line_start = false;
+        state = STATE_SEMICOLON;
+      }
+      else if (c == ':') {
+        at_line_start = false;
+        state = STATE_COLON;
+      }
+      else if (c == ',') {
+        at_line_start = false;
+        state = STATE_COMMA;
+      }
+      else if (c == '(') {
+        at_line_start = false;
+        bracket_depth++;
+        state = STATE_LPAR;
+      }
+      else if (c == ')') {
+        at_line_start = false;
+        bracket_depth--;
+        state = STATE_RPAR;
+      }
+
+      /* --- ANNOTATIONS --- */
+      else if (c == '@') {
+        at_line_start = false;
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_ANNOT;
+      }
+
+      /* --- EOF ---*/
+      else if (c == EOF) {
+        at_line_start = false;
+        state = STATE_EOF;
+      }
+
+      else
+      //osetreni jinych vstupu
+    }
+  }
 }
