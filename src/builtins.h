@@ -10,17 +10,7 @@
 #ifndef IFJ_IAL_PROJECT_BUILTINS_H
 #define IFJ_IAL_PROJECT_BUILTINS_H
 
-/**
- * @brief Temporary type of a value passed to buildin functions
- *
- * @note Nahradit spolecnym DataType
- */
-typedef enum {
-  BUILTIN_TYPE_INT,
-  BUILTIN_TYPE_DOUBLE,
-  BUILTIN_TYPE_STRING,
-  BUILTIN_TYPE_UNIT
-} BuiltinType;
+#include "types.h"
 
 /**
  * @brief Generates print(value)
@@ -28,7 +18,7 @@ typedef enum {
  * @param value Operand to print (variable or constant)
  * @param type Type of the value
  */
-void builtin_print(const char *value, BuiltinType type);
+void builtin_print(const char *value, DataType type);
 
 /**
  * @brief Generates readLine()
@@ -64,7 +54,7 @@ void builtin_readdouble(const char *result);
  * @param source Value to convert
  * @param type Type of the value
  */
-void builtin_tostr(const char *result, const char *source, BuiltinType type);
+void builtin_tostr(const char *result, const char *source, DataType type);
 
 /**
  * @brief Generates toInt(value)
@@ -83,7 +73,7 @@ void builtin_toint(const char *result, const char *value);
 void builtin_strlength(const char *result, const char *str);
 
 /**
- * @brief Generates definition of the function
+ * @brief Generates definition of the IFJcode26 function $builtin_substr
  */
 void builtin_substr_definition(void);
 
@@ -99,12 +89,12 @@ void builtin_substr_call(const char *result, const char *value,
                          const char *start, const char *end);
 
 /**
- * @brief Generates a definition of the function
+ * @brief Generates a definition of the IFJcode26 function $builtin_ord
  */
 void builtin_ord_definition(void);
 
 /**
- * @brief Generates a call of subStr(value, start, end)
+ * @brief Generates a call of ord(value, start, end)
  *
  * @param result Variable that receives the ASCII code
  * @param string Source string
@@ -120,4 +110,11 @@ void builtin_ord_call(const char *result, const char *string,
  * @param value Integer ASCII code
  */
 void builtin_chr(const char *result, const char *value);
+
+/**
+ * @brief Generates readBoolean() (extension BOOLTHEN)
+ *
+ * @param result Variable that receives the value (bool)
+ */
+void builtin_readbool(const char *result);
 #endif
