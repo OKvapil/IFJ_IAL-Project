@@ -50,7 +50,7 @@ static OperatorsTable token_to_index(TokenType type) {
     break;
   case TOKEN_INT_LIT:
     return ID;
-  case TOKEN_FLOAT_LIT:
+  case TOKEN_DOUBLE_LIT:
     return ID;
   case TOKEN_STRING_LIT:
     return ID;
@@ -88,7 +88,7 @@ typedef struct {
 
 static void init_stack(Stack *s) { s->top = NULL; }
 
-static void push_stack(Stack *s, SymbolType Type, OperatorsTable operator) {
+static int push_stack(Stack *s, SymbolType Type, OperatorsTable operator) {
   StackNode *new_node = malloc(sizeof(StackNode));
   if (new_node == NULL) {
     return 99;

@@ -21,6 +21,7 @@ AstNode *ast_new_if(AstNode *cond, AstNode *then_block, AstNode *else_block,
   node->data.if_state.cond = cond;
   node->data.if_state.then_block = then_block;
   node->data.if_state.else_block = else_block;
+  node->result_type = TYPE_UNKNOWN;
   return node;
 }
 
@@ -33,6 +34,7 @@ AstNode *ast_new_while(AstNode *cond, AstNode *block, size_t line) {
   node->line = line;
   node->data.while_state.cond = cond;
   node->data.while_state.block = block;
+  node->result_type = TYPE_UNKNOWN;
   return node;
 }
 
@@ -45,6 +47,7 @@ AstNode *ast_new_expr_assign(char *name, AstNode *value, size_t line) {
   node->line = line;
   node->data.expr_assign.name = name;
   node->data.expr_assign.value = value;
+  node->result_type = TYPE_UNKNOWN;
   return node;
 }
 
@@ -59,6 +62,7 @@ AstNode *ast_new_binary(TokenType op, AstNode *left, AstNode *right,
   node->line = line;
   node->data.binary.left = left;
   node->data.binary.right = right;
+  node->result_type = TYPE_UNKNOWN;
   return node;
 }
 
@@ -71,6 +75,7 @@ AstNode *ast_new_unary(TokenType op, AstNode *operand, size_t line) {
   node->data.unary.op = op;
   node->line = line;
   node->data.unary.operand = operand;
+  node->result_type = TYPE_UNKNOWN;
   return node;
 }
 
@@ -79,22 +84,30 @@ AstNode *ast_new_from_token(Token *value) {
   if (node == NULL) {
     return NULL;
   }
+  node->line = value->line;
+  node->var_id = 0;
   switch (value->type) {
   case TOKEN_INT_LIT:
     node->kind = AST_INT_LIT;
     node->data.int_value = value->attr.int_val;
+    node->result_type = TYPE_INT;
     break;
-  case TOKEN_FLOAT_LIT:
-    node->kind = AST_FLOAT_LIT;
-    node->data.float_value;
+  case TOKEN_DOUBLE_LIT:
+    node->kind = AST_DOUBLE_LIT;
+    node->data.float_value = value->attr.float_val;
+    node->result_type = TYPE_DOUBLE;
     break;
   case TOKEN_STRING_LIT:
     node->kind = AST_STRING_LIT;
-    node->data.int_value = value->attr.str_val;
+    node->data.text = value->attr.str_val;
+    value->attr.str_val = NULL;
+    node->result_type = TYPE_STRING;
     break;
   case TOKEN_IDENTIFIER:
     node->kind = AST_IDENTIFIER;
-    node->data.int_value = value->attr.str_val;
+    node->data.text = value->attr.str_val;
+    value->attr.str_val = NULL;
+    node->result_type = TYPE_UNKNOWN;
     break;
   default:
     free(node);

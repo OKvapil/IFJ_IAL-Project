@@ -12,10 +12,11 @@
 #include "token.h"
 #include <stddef.h>
 #include <stdint.h>
+#include "types.h"
 
 typedef enum {
   AST_INT_LIT,
-  AST_FLOAT_LIT,
+  AST_DOUBLE_LIT,
   AST_STRING_LIT,
   AST_IDENTIFIER,
   AST_UNARY,
@@ -33,7 +34,8 @@ typedef enum {
 typedef struct AstNode {
   AstKind kind;
   size_t line;
-  int result_type;
+  DataType result_type;
+  int var_id;
 
   union {
     int64_t int_value;
