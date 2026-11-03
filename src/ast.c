@@ -54,7 +54,8 @@ AstNode *ast_new_binary(TokenType op, AstNode *left, AstNode *right,
   if (node == NULL) {
     return NULL;
   }
-  node->kind = op;
+  node->kind = AST_BINARY;
+  node->data.binary.op = op;
   node->line = line;
   node->data.binary.left = left;
   node->data.binary.right = right;
@@ -66,8 +67,38 @@ AstNode *ast_new_unary(TokenType op, AstNode *operand, size_t line) {
   if (node == NULL) {
     return NULL;
   }
-  node->kind = op;
+  node->kind = AST_UNARY;
+  node->data.unary.op = op;
   node->line = line;
   node->data.unary.operand = operand;
+  return node;
+}
+
+AstNode *ast_new_from_token(Token *value) {
+  AstNode *node = malloc(sizeof(AstNode));
+  if (node == NULL) {
+    return NULL;
+  }
+  switch (value->type) {
+  case TOKEN_INT_LIT:
+    node->kind = AST_INT_LIT;
+    node->data.int_value = value->attr.int_val;
+    break;
+  case TOKEN_FLOAT_LIT:
+    node->kind = AST_FLOAT_LIT;
+    node->data.float_value;
+    break;
+  case TOKEN_STRING_LIT:
+    node->kind = AST_STRING_LIT;
+    node->data.int_value = value->attr.str_val;
+    break;
+  case TOKEN_IDENTIFIER:
+    node->kind = AST_IDENTIFIER;
+    node->data.int_value = value->attr.str_val;
+    break;
+  default:
+    free(node);
+    return NULL;
+  }
   return node;
 }

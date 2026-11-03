@@ -15,7 +15,7 @@
 
 typedef enum {
   AST_INT_LIT,
-  AST_DOUBLE_LIT,
+  AST_FLOAT_LIT,
   AST_STRING_LIT,
   AST_IDENTIFIER,
   AST_UNARY,
@@ -30,14 +30,14 @@ typedef enum {
   AST_VAR
 } AstKind;
 
-typedef struct {
+typedef struct AstNode {
   AstKind kind;
   size_t line;
   int result_type;
 
   union {
     int64_t int_value;
-    double double_value;
+    double float_value;
     char *text;
 
     struct {
@@ -64,5 +64,14 @@ typedef struct {
     } expr_assign;
   } data;
 } AstNode;
+
+AstNode *ast_new_if(AstNode *cond, AstNode *then_block, AstNode *else_block,
+                    size_t line);
+AstNode *ast_new_while(AstNode *cond, AstNode *block, size_t line);
+AstNode *ast_new_expr_assign(char *name, AstNode *value, size_t line);
+AstNode *ast_new_binary(TokenType op, AstNode *left, AstNode *right,
+                        size_t line);
+AstNode *ast_new_unary(TokenType op, AstNode *operand, size_t line);
+AstNode *ast_new_from_token(Token *value);
 
 #endif
