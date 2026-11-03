@@ -13,7 +13,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-
 typedef enum {
   AST_INT_LIT,
   AST_DOUBLE_LIT,
@@ -26,19 +25,21 @@ typedef enum {
   AST_WHILE,
   AST_BLOCK,
   AST_ASSIGN,
+  AST_THEN,
   AST_VAL,
   AST_VAR
-  
 } AstKind;
 
-struct AstNode {
+typedef struct {
   AstKind kind;
   size_t line;
   int result_type;
+
   union {
     int64_t int_value;
     double double_value;
     char *text;
+
     struct {
       TokenType op;
       struct AstNode *operand;
@@ -48,6 +49,19 @@ struct AstNode {
       struct AstNode *left;
       struct AstNode *right;
     } binary;
+    struct {
+      struct AstNode *cond;
+      struct AstNode *then_block;
+      struct AstNode *else_block;
+    } if_state;
+    struct {
+      struct AstNode *cond;
+      struct AstNode *block;
+    } while_state;
+    struct {
+      char *name;
+      struct AstNode *value;
+    } expr_assign;
   } data;
 } AstNode;
 
