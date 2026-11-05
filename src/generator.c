@@ -178,14 +178,25 @@ bool gen_expr(const AstNode *node) {
   }
 }
 
+static bool fn_label(char *buff, size_t size, const char *name) {
+  if (name == NULL) {
+    return false;
+  }
+
+  int len = snprintf(buff, size, "$fn_%s", name);
+  if (len < 0 || (size_t)len >= size) {
+    return false;
+  }
+  return true;
+}
+
 bool gen_program_start(const char *main_name) {
   if (main_name == NULL) {
     return false;
   }
 
-  char name[256];
-  int len = snprintf(name, sizeof(name), "$fn_%s", main_name);
-  if (len < 0 || (size_t)len >= sizeof(name)) {
+  char label[256];
+  if (!fn_label(label, sizeof(label), main_name)) {
     return false;
   }
 
@@ -193,7 +204,7 @@ bool gen_program_start(const char *main_name) {
   codegen_defvar("GF@$trash");
   codegen_defvar("GF@$concat_l");
   codegen_defvar("GF@$concat_r");
-  codegen_call(name);
+  codegen_call(label);
   codegen_pops("GF@$trash");
   codegen_exit("int@0");
   return true;
