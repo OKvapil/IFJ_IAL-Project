@@ -1,0 +1,14 @@
+# IDE files
+.idea/
+*.iml
+
+# CLion build folders
+cmake-build-*/
+
+# VSCode build
+.vscode/
+
+# Compiled output
+*.o
+*.out
+
