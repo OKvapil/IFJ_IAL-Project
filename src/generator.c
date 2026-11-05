@@ -22,23 +22,27 @@ static bool needs_int2float(DataType type1, DataType type2) {
 }
 
 static bool gen_binary(const AstNode *node) {
-  if (node == NULL || node->data.binary.left == NULL || node->data.binary.right == NULL) {
+  if (node == NULL || node->data.binary.left == NULL ||
+      node->data.binary.right == NULL) {
     return false;
   }
 
-  bool int_div = node->data.binary.op == TOKEN_DIV && node->result_type == TYPE_INT;
+  bool int_div =
+      node->data.binary.op == TOKEN_DIV && node->result_type == TYPE_INT;
 
   if (!gen_expr(node->data.binary.left)) {
     return false;
   }
-  if (int_div || needs_int2float(node->data.binary.left->result_type, node->data.binary.right->result_type)) {
+  if (int_div || needs_int2float(node->data.binary.left->result_type,
+                                 node->data.binary.right->result_type)) {
     codegen_int2floats();
   }
 
   if (!gen_expr(node->data.binary.right)) {
     return false;
   }
-  if (int_div || needs_int2float(node->data.binary.right->result_type, node->data.binary.left->result_type)) {
+  if (int_div || needs_int2float(node->data.binary.right->result_type,
+                                 node->data.binary.left->result_type)) {
     codegen_int2floats();
   }
 
@@ -208,4 +212,11 @@ bool gen_program_start(const char *main_name) {
   codegen_pops("GF@$trash");
   codegen_exit("int@0");
   return true;
+}
+
+// Build-in functions will be at the end of the program (they are written in ifj
+// code)
+void gen_program_end(void) {
+  builtin_substr_definition();
+  builtin_ord_definition();
 }
