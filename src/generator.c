@@ -1,6 +1,6 @@
 /**
  * @file generator.c
- * @brief Generates IFJcode26 from the abstract syntax tree (interface)
+ * @brief Generates IFJcode26 from the abstract syntax tree (implementation)
  *
  * IFJ/IAL project - IFJ26 compiler
  *
@@ -26,17 +26,19 @@ static bool gen_binary(const AstNode *node) {
     return false;
   }
 
+  bool int_div = node->data.binary.op == TOKEN_DIV && node->result_type == TYPE_INT;
+
   if (!gen_expr(node->data.binary.left)) {
     return false;
   }
-  if (needs_int2float(node->data.binary.left->result_type, node->data.binary.right->result_type)) {
+  if (int_div || needs_int2float(node->data.binary.left->result_type, node->data.binary.right->result_type)) {
     codegen_int2floats();
   }
 
   if (!gen_expr(node->data.binary.right)) {
     return false;
   }
-  if (needs_int2float(node->data.binary.right->result_type, node->data.binary.left->result_type)) {
+  if (int_div || needs_int2float(node->data.binary.right->result_type, node->data.binary.left->result_type)) {
     codegen_int2floats();
   }
 
@@ -56,6 +58,12 @@ static bool gen_binary(const AstNode *node) {
     break;
   case TOKEN_MUL:
     codegen_muls();
+    break;
+  case TOKEN_DIV:
+    codegen_divs();
+    if (int_div) {
+      codegen_float2ints();
+    }
     break;
   case TOKEN_LT:
     codegen_lts();
