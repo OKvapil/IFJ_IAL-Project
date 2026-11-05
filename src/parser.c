@@ -13,21 +13,6 @@
 
 static Token current_token;
 
-static void check_token(TokenType expected_token);
-static void parse_import(void);
-static void parse_program(void);
-static void parse_statement(void);
-static void parse_expression(void);
-static void parse_block(void);
-static void parse_type(void);
-//
-static void parse_func_def(void);
-static void parse_return_state(void);
-static void parse_if_state(void);
-static void parse_while_do_state(void);
-static void parse_params(void);
-static void parse_func_main(void);
-
 static void check_token(TokenType expected_token) {
   if (current_token.type == expected_token) {
     token_clear(&current_token);
@@ -89,10 +74,6 @@ static void parse_statement(void) {
     break;
   default:
   }
-}
-
-static void parse_expression(void) {
-  // Implement expression parsing logic here
 }
 
 static void parse_block(void) {
