@@ -25,6 +25,14 @@
  */
 bool gen_expr(const AstNode *node);
 
-
+/**
+ * @brief Generates start of the program
+ *
+ * Prints the header, defines global variables, calls the main function and ends the program
+ *
+ * @param main_name Name of the function
+ *
+ * @return false if the name is too long or NULL
+ */
 bool gen_program_start(const char *main_name);
 #endif
