@@ -26,4 +26,5 @@
 bool gen_expr(const AstNode *node);
 
 
+bool gen_program_start(const char *main_name);
 #endif
