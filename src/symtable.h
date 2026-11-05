@@ -1,24 +1,13 @@
 #pragma once
 
 #include "hashtable.h"
+#include "types.h"
 #include <stdbool.h>
 
 /**
  * @brief Enum defining the kinds of symbols.
  */
 typedef enum SymbolKind_t { SYMBOL_VARIABLE, SYMBOL_FUNCTION } SymbolKind;
-
-/**
- * @brief Enum defining the data types of symbols.
- */
-typedef enum DataType_t {
-  TYPE_INT,
-  TYPE_DOUBLE,
-  TYPE_STRING,
-  TYPE_BOOL,
-  TYPE_UNIT,
-  TYPE_UNKNOWN
-} DataType;
 
 /**
  * @brief Enum defining the return values of the variable/function declaration
@@ -138,7 +127,8 @@ DeclarationCode st_declare_var(SymTable *symtable, const char *name,
  * @brief Declares a function symbol.
  *
  * Declares the function in the global scope.
- * new_symbol is written only on success and belongs to symtable
+ * new_symbol is written only on success and belongs to symtable.
+ * new_symbol can be NULL if the caller doesn't need it.
  * type may be TYPE_UNKNOWN when the return type is inferred.
  * Parameter arrays and names inside param_names are copied, caller keeps
  * ownership.
