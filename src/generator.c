@@ -14,6 +14,62 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static bool gen_binary(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.binary.left)) {
+    return false;
+  }
+  if (!gen_expr(node->data.binary.right)) {
+    return false;
+  }
+
+  switch (node->data.binary.op) {
+  case TOKEN_PLUS:
+    codegen_adds();
+    break;
+  case TOKEN_MINUS:
+    codegen_subs();
+    break;
+  case TOKEN_MUL:
+    codegen_muls();
+    break;
+  default:
+    return false;
+  }
+  return true;
+}
+
+static bool gen_unary(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.unary.operand)) {
+    return false;
+  }
+
+  switch (node->data.unary.op) {
+  case TOKEN_PLUS:
+    break;
+  case TOKEN_MINUS:
+    if (node->result_type == TYPE_INT) {
+      codegen_pushs("int@-1");
+    } else if (node->result_type == TYPE_DOUBLE) {
+      codegen_pushs("float@-0x1p+0");
+    } else {
+      return false;
+    }
+    codegen_muls();
+    break;
+  default:
+    return false;
+  }
+  return true;
+}
+
 bool gen_expr(const AstNode *node) {
   if (node == NULL) {
     return false;
@@ -53,10 +109,20 @@ bool gen_expr(const AstNode *node) {
     }
 
     char name[256];
-    snprintf(name, sizeof(name), "LF@%s$%d", node->data.text, node->var_id);
+
+    int len =
+        snprintf(name, sizeof(name), "LF@%s$%d", node->data.text, node->var_id);
+    if (len < 0 || (size_t)len >= sizeof(name)) {
+      return false;
+    }
+
     codegen_pushs(name);
     return true;
   }
+  case AST_BINARY:
+    return gen_binary(node);
+  case AST_UNARY:
+    return gen_unary(node);
   default:
     return false;
   }
