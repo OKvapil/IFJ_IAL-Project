@@ -14,21 +14,42 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static bool needs_int2float(DataType type1, DataType type2) {
+  if (type1 == TYPE_INT && type2 == TYPE_DOUBLE) {
+    return true;
+  }
+  return false;
+}
+
 static bool gen_binary(const AstNode *node) {
-  if (node == NULL) {
+  if (node == NULL || node->data.binary.left == NULL || node->data.binary.right == NULL) {
     return false;
   }
 
   if (!gen_expr(node->data.binary.left)) {
     return false;
   }
+  if (needs_int2float(node->data.binary.left->result_type, node->data.binary.right->result_type)) {
+    codegen_int2floats();
+  }
+
   if (!gen_expr(node->data.binary.right)) {
     return false;
+  }
+  if (needs_int2float(node->data.binary.right->result_type, node->data.binary.left->result_type)) {
+    codegen_int2floats();
   }
 
   switch (node->data.binary.op) {
   case TOKEN_PLUS:
-    codegen_adds();
+    if (node->result_type == TYPE_STRING) {
+      codegen_pops("GF@$concat_r");
+      codegen_pops("GF@$concat_l");
+      codegen_concat("GF@$concat_l", "GF@$concat_l", "GF@$concat_r");
+      codegen_pushs("GF@$concat_l");
+    } else {
+      codegen_adds();
+    }
     break;
   case TOKEN_MINUS:
     codegen_subs();
