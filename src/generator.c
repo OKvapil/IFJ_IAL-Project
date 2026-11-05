@@ -48,7 +48,13 @@ bool gen_expr(const AstNode *node) {
     return true;
   }
   case AST_IDENTIFIER: {
-    
+    if (node->data.text == NULL) {
+      return false;
+    }
+
+    char name[256];
+    snprintf(name, sizeof(name), "LF@%s$%d", node->data.text, node->var_id);
+    codegen_pushs(name);
     return true;
   }
   default:
