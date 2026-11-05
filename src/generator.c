@@ -36,6 +36,27 @@ static bool gen_binary(const AstNode *node) {
   case TOKEN_MUL:
     codegen_muls();
     break;
+  case TOKEN_LT:
+    codegen_lts();
+    break;
+  case TOKEN_GT:
+    codegen_gts();
+    break;
+  case TOKEN_EQ:
+    codegen_eqs();
+    break;
+  case TOKEN_NEQ:
+    codegen_eqs();
+    codegen_nots();
+    break;
+  case TOKEN_LTE:
+    codegen_gts();
+    codegen_nots();
+    break;
+  case TOKEN_GTE:
+    codegen_lts();
+    codegen_nots();
+    break;
   default:
     return false;
   }
