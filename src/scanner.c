@@ -136,24 +136,15 @@ typedef enum scanner_state_e {
   STATE_MSTR_END_3,    // Final: closed """
 
   /* --- Operators and Delimiters --- */
-  STATE_ASSIGN,       // Wait: '='
-  STATE_ASSIGN_FINAL, // Final: '=' (if not '==')
-  STATE_EQUAL,        // Final: '=='
-
-  STATE_LESS_THAN,       // Wait: '<'
-  STATE_LESS_THAN_FINAL, // Final: '<' (if not '<=')
-  STATE_LESS_THAN_EQUAL, // Final: '<='
-
-  STATE_GREATER_THAN,       // Wait: '>'
-  STATE_GREATER_THAN_FINAL, // Final: '>' (if not '>=')
-  STATE_GREATER_EQUAL,      // Final: '>='
+  STATE_ASSIGN,       // Decision for '=' or '=='
+  STATE_LESS_THAN,    // Decision for '<' or '<='
+  STATE_GREATER_THAN, // Decision for '>' or '>='
 
   STATE_PLUS,     // Final: '+'
   STATE_MINUS,    // Final: '-'
   STATE_MULTIPLY, // Final: '*'
 
-  STATE_NOT,       // Wait: '!'
-  STATE_NOT_EQUAL, // Final: '!='
+  STATE_NOT, // Decision for '!' / '!='
 
   /* --- Division and Comments --- */
   STATE_SLASH,          // Wait: '/'
@@ -174,7 +165,6 @@ typedef enum scanner_state_e {
   STATE_ANNOT_M,
   STATE_ANNOT_MA,
   STATE_ANNOT_MAI,
-  STATE_ANNOT_MAIN,
 
   /* --- End of File/Line --- */
   STATE_EOL, // Final: End of line
@@ -222,76 +212,97 @@ int scanner_get_next_token(Token *token) {
 
     switch (state) {
     case STATE_PLUS:
+      ungetc(c, source_file);
       token->type = TOKEN_PLUS;
       token->line = current_line;
       return 0;
 
     case STATE_MINUS:
+      ungetc(c, source_file);
       token->type = TOKEN_MINUS;
       token->line = current_line;
       return 0;
 
     case STATE_MULTIPLY:
+      ungetc(c, source_file);
       token->type = TOKEN_MUL;
       token->line = current_line;
       return 0;
 
     case STATE_GREATER_THAN:
       if (c == '=') {
-        state = STATE_GREATER_EQUAL;
+        token->type = TOKEN_GTE;
+        token->line = current_line;
+        return 0;
       } else {
         ungetc(c, source_file);
-        state = STATE_GREATER_THAN_FINAL;
+        token->type = TOKEN_GT;
+        token->line = current_line;
+        return 0;
       }
-      break;
-
-    case STATE_GREATER_EQUAL:
-      token->type = TOKEN_GTE;
-      token->line = current_line;
-      return 0;
-
-    case STATE_GREATER_THAN_FINAL:
-      token->type = TOKEN_GT;
-      token->line = current_line;
-      return 0;
 
     case STATE_LESS_THAN:
       if (c == '=') {
-        state = STATE_LESS_THAN_EQUAL;
+        token->type = TOKEN_LTE;
+        token->line = current_line;
+        return 0;
       } else {
         ungetc(c, source_file);
-        state = STATE_LESS_THAN_FINAL;
+        token->type = TOKEN_LT;
+        token->line = current_line;
+        return 0;
       }
-      break;
-
-    case STATE_LESS_THAN_EQUAL:
-      token->type = TOKEN_LTE;
-      token->line = current_line;
-      return 0;
-
-    case STATE_LESS_THAN_FINAL:
-      token->type = TOKEN_LT;
-      token->line = current_line;
-      return 0;
 
     case STATE_ASSIGN:
       if (c == '=') {
-        state = STATE_EQUAL;
+        token->type = TOKEN_EQ;
+        token->line = current_line;
+        return 0;
       } else {
         ungetc(c, source_file);
-        state = STATE_ASSIGN_FINAL;
+        token->type = TOKEN_ASSIGN;
+        token->line = current_line;
+        return 0;
       }
+
+    case STATE_NOT:
+      if (c == '=') {
+        token->type = TOKEN_NEQ;
+        token->line = current_line;
+        return 0;
+      } else {
+        return ERR_LEXICAL;
+      }
+
+    case STATE_ANNOT:
+      if (c == 'm')
+        state = STATE_ANNOT_M;
+      else
+        return ERR_LEXICAL;
       break;
 
-      case STATE_EQUAL:
-      token->type = TOKEN_EQ;
-      token->line = current_line;
-      return 0;
+    case STATE_ANNOT_M:
+      if (c == 'a')
+        state = STATE_ANNOT_MA;
+      else
+        return ERR_LEXICAL;
+      break;
 
-      case STATE_ASSIGN_FINAL:
-      token->type = TOKEN_ASSIGN;
-      token->line = current_line;
-      return 0;
+    case STATE_ANNOT_MA:
+      if (c == 'i')
+        state = STATE_ANNOT_MAI;
+      else
+        return ERR_LEXICAL;
+      break;
+
+    case STATE_ANNOT_MAI:
+      if (c == 'n') {
+        token->type = TOKEN_ANNOT_MAIN;
+        token->line = current_line;
+        return 0;
+      } else {
+        return ERR_LEXICAL;
+      }
 
     case STATE_START:
 
