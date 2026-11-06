@@ -16,12 +16,15 @@
 #include <string.h>
 
 #define ERR_INTERNAL 99
+#define ERR_LEXICAL 1
 #define BUFFER_INIT_CAPACITY 32
 
 static FILE *source_file = NULL;
 static size_t current_line = 1;
 static int bracket_depth = 0;
 static bool at_line_start = true;
+static size_t space_count = 0;
+static bool has_tab = false;
 
 /* ============================================================================
  * Authorship Note:
@@ -186,12 +189,18 @@ void scanner_init(FILE *source) {
     source_file = stdin;
   }
   current_line = 1;
+  bracket_depth = 0;
+  at_line_start = true;
+  space_count = 0;
+  has_tab = false;
   scanner_buffer_init(&s_buf);
 }
 
 void scanner_cleanup(void) {
   scanner_buffer_free(&s_buf);
   source_file = NULL;
+  space_count = 0;
+  has_tab = false;
 }
 
 int scanner_get_next_token(Token *token) {
@@ -212,11 +221,124 @@ int scanner_get_next_token(Token *token) {
     c = fgetc(source_file);
 
     switch (state) {
+    case STATE_PLUS:
+      token->type = TOKEN_PLUS;
+      token->line = current_line;
+      return 0;
+
+    case STATE_MINUS:
+      token->type = TOKEN_MINUS;
+      token->line = current_line;
+      return 0;
+
+    case STATE_MULTIPLY:
+      token->type = TOKEN_MUL;
+      token->line = current_line;
+      return 0;
+
+    case STATE_GREATER_THAN:
+      if (c == '=') {
+        state = STATE_GREATER_EQUAL;
+      } else {
+        ungetc(c, source_file);
+        state = STATE_GREATER_THAN_FINAL;
+      }
+      break;
+
+    case STATE_GREATER_EQUAL:
+      token->type = TOKEN_GTE;
+      token->line = current_line;
+      return 0;
+
+    case STATE_GREATER_THAN_FINAL:
+      token->type = TOKEN_GT;
+      token->line = current_line;
+      return 0;
+
+    case STATE_LESS_THAN:
+      if (c == '=') {
+        state = STATE_LESS_THAN_EQUAL;
+      } else {
+        ungetc(c, source_file);
+        state = STATE_LESS_THAN_FINAL;
+      }
+      break;
+
+    case STATE_LESS_THAN_EQUAL:
+      token->type = TOKEN_LTE;
+      token->line = current_line;
+      return 0;
+
+    case STATE_LESS_THAN_FINAL:
+      token->type = TOKEN_LT;
+      token->line = current_line;
+      return 0;
+
+    case STATE_ASSIGN:
+      if (c == '=') {
+        state = STATE_EQUAL;
+      } else {
+        ungetc(c, source_file);
+        state = STATE_ASSIGN_FINAL;
+      }
+      break;
+
+      case STATE_EQUAL:
+      token->type = TOKEN_EQ;
+      token->line = current_line;
+      return 0;
+
+      case STATE_ASSIGN_FINAL:
+      token->type = TOKEN_ASSIGN;
+      token->line = current_line;
+      return 0;
+
     case STATE_START:
-      // TODO: doplneni pocitani mezer EOL
+
+      /* --- WHITESPACE --- */
+      if (isspace(c)) {
+        /* --- LF --- */
+        if (c == '\n') {
+          current_line++;
+
+          /* --- EMPTY LINE --- */
+          if (at_line_start) {
+            space_count = 0;
+            has_tab = false;
+            break;
+          }
+
+          else {
+            at_line_start = true;
+            space_count = 0;
+            has_tab = false;
+
+            if (bracket_depth <= 0) {
+              state = STATE_EOL;
+              break;
+            } else {
+              break;
+            }
+          }
+        }
+        /* --- SPACE or TAB --- */
+        if (at_line_start) {
+          if (c == ' ') {
+            space_count++;
+            break;
+          } else if (c == '\t') {
+            has_tab = true;
+            break;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
 
       /* --- IDENTIFIERS AND KEYWORDS --- */
-      if (isalpha(c) || c == '_') {
+      else if (isalpha(c) || c == '_') {
         at_line_start = false;
         scanner_buffer_append(&s_buf, c);
         if (c == '_')
@@ -247,32 +369,25 @@ int scanner_get_next_token(Token *token) {
       else if (c == '=') {
         at_line_start = false;
         state = STATE_ASSIGN;
-      }
-      else if (c == '+') {
+      } else if (c == '+') {
         at_line_start = false;
         state = STATE_PLUS;
-      }
-      else if (c == '-') {
+      } else if (c == '-') {
         at_line_start = false;
         state = STATE_MINUS;
-      }
-      else if (c == '*') {
+      } else if (c == '*') {
         at_line_start = false;
         state = STATE_MULTIPLY;
-      }
-      else if (c == '>') {
+      } else if (c == '>') {
         at_line_start = false;
         state = STATE_GREATER_THAN;
-      }
-      else if (c == '<') {
+      } else if (c == '<') {
         at_line_start = false;
         state = STATE_LESS_THAN;
-      }
-      else if (c == '!') {
+      } else if (c == '!') {
         at_line_start = false;
         state = STATE_NOT;
-      }
-      else if (c == '/') {
+      } else if (c == '/') {
         at_line_start = false;
         state = STATE_SLASH;
       }
@@ -281,30 +396,26 @@ int scanner_get_next_token(Token *token) {
       else if (c == ';') {
         at_line_start = false;
         state = STATE_SEMICOLON;
-      }
-      else if (c == ':') {
+      } else if (c == ':') {
         at_line_start = false;
         state = STATE_COLON;
-      }
-      else if (c == ',') {
+      } else if (c == ',') {
         at_line_start = false;
         state = STATE_COMMA;
-      }
-      else if (c == '(') {
+      } else if (c == '(') {
         at_line_start = false;
         bracket_depth++;
         state = STATE_LPAR;
-      }
-      else if (c == ')') {
+      } else if (c == ')') {
         at_line_start = false;
-        bracket_depth--;
+        if (bracket_depth > 0)
+          bracket_depth--;
         state = STATE_RPAR;
       }
 
       /* --- ANNOTATIONS --- */
       else if (c == '@') {
         at_line_start = false;
-        scanner_buffer_append(&s_buf, c);
         state = STATE_ANNOT;
       }
 
@@ -315,7 +426,9 @@ int scanner_get_next_token(Token *token) {
       }
 
       else
-      //osetreni jinych vstupu
+        return ERR_LEXICAL;
+
+      break;
     }
   }
 }
