@@ -39,7 +39,7 @@ typedef enum {
   /* --- Identifiers and Literals --- */
   TOKEN_IDENTIFIER, // Variable or function name
   TOKEN_INT_LIT,    // Integer literal
-  TOKEN_DOUBLE_LIT,  // Double literal
+  TOKEN_DOUBLE_LIT, // Double literal
   TOKEN_STRING_LIT, // String literal
 
   /* --- Annotations --- */
