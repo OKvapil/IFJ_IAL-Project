@@ -25,6 +25,7 @@ static int bracket_depth = 0;
 static bool at_line_start = true;
 static size_t space_count = 0;
 static bool has_tab = false;
+static int comment_depth = 0;
 
 /* ============================================================================
  * Authorship Note:
@@ -147,11 +148,11 @@ typedef enum scanner_state_e {
   STATE_NOT, // Decision for '!' / '!='
 
   /* --- Division and Comments --- */
-  STATE_SLASH,          // Wait: '/'
-  STATE_DIVIDE,         // Final: '/' (if not comment)
-  STATE_COM_LINE,       // In line comment
-  STATE_COM_BLOCK,      // In block comment
-  STATE_COM_BLOCK_STAR, // Wait: '*' in block comment
+  STATE_SLASH,           // Wait: '/'
+  STATE_COM_LINE,        // In line comment
+  STATE_COM_BLOCK,       // In block comment
+  STATE_COM_BLOCK_SLASH, // Wait: '*' for nested block comment
+  STATE_COM_BLOCK_STAR,  // Wait: '/' in block comment
 
   /* --- Punctuation and Brackets --- */
   STATE_SEMICOLON, // Final: ';'
@@ -211,6 +212,51 @@ int scanner_get_next_token(Token *token) {
     c = fgetc(source_file);
 
     switch (state) {
+
+    /* --- PUNCTUATION AND BRACKETS --- */
+    case STATE_SEMICOLON:
+      ungetc(c, source_file);
+      token->type = TOKEN_SEMICOLON;
+      token->line = current_line;
+      return 0;
+
+    case STATE_COLON:
+      ungetc(c, source_file);
+      token->type = TOKEN_COLON;
+      token->line = current_line;
+      return 0;
+
+    case STATE_COMMA:
+      ungetc(c, source_file);
+      token->type = TOKEN_COMMA;
+      token->line = current_line;
+      return 0;
+
+    case STATE_LPAR:
+      ungetc(c, source_file);
+      token->type = TOKEN_LPAREN;
+      token->line = current_line;
+      return 0;
+
+    case STATE_RPAR:
+      ungetc(c, source_file);
+      token->type = TOKEN_RPAREN;
+      token->line = current_line;
+      return 0;
+
+    /* --- END OF LINE / FILE --- */
+    case STATE_EOL:
+      ungetc(c, source_file);
+      token->type = TOKEN_EOL;
+      token->line = current_line - 1;
+      return 0;
+
+    case STATE_EOF:
+      token->type = TOKEN_EOF;
+      token->line = current_line;
+      return 0;
+
+    /* --- ARITHMETIC OPERATORS --- */
     case STATE_PLUS:
       ungetc(c, source_file);
       token->type = TOKEN_PLUS;
@@ -229,6 +275,7 @@ int scanner_get_next_token(Token *token) {
       token->line = current_line;
       return 0;
 
+    /* --- RELATIONAL AND ASSIGNMENT OPERATORS --- */
     case STATE_GREATER_THAN:
       if (c == '=') {
         token->type = TOKEN_GTE;
@@ -274,6 +321,7 @@ int scanner_get_next_token(Token *token) {
         return ERR_LEXICAL;
       }
 
+    /* --- ANNOTATION MAIN --- */
     case STATE_ANNOT:
       if (c == 'm')
         state = STATE_ANNOT_M;
@@ -303,6 +351,189 @@ int scanner_get_next_token(Token *token) {
       } else {
         return ERR_LEXICAL;
       }
+
+    /* --- DIVISION AND COMMENTS --- */
+    case STATE_SLASH:
+      if (c == '/') {
+        state = STATE_COM_LINE;
+        break;
+      } else if (c == '*') {
+        comment_depth++;
+        state = STATE_COM_BLOCK;
+        break;
+      } else {
+        at_line_start = false;
+        ungetc(c, source_file);
+        token->type = TOKEN_DIV;
+        token->line = current_line;
+        return 0;
+      }
+
+    case STATE_COM_LINE:
+      if (c == EOF) {
+        state = STATE_EOF;
+        break;
+      } else if (c == '\n') {
+        current_line++;
+
+        // empty line
+        if (at_line_start == true) {
+          state = STATE_START;
+          space_count = 0;
+          has_tab = false;
+          break;
+
+          // non empty line
+        } else {
+          at_line_start = true;
+          space_count = 0;
+          has_tab = false;
+          if (bracket_depth <= 0) {
+            state = STATE_EOL;
+            break;
+
+            // inside brackets, LF is ignored
+          } else {
+            state = STATE_START;
+            break;
+          }
+        }
+        // comment body
+      } else {
+        break;
+      }
+
+    case STATE_COM_BLOCK:
+      if (c == EOF) {
+        return ERR_LEXICAL;
+      } else if (c == '*') {
+        state = STATE_COM_BLOCK_STAR;
+        break;
+      } else if (c == '/') {
+        state = STATE_COM_BLOCK_SLASH;
+        break;
+      } else if (c == '\n') {
+        current_line++;
+        break;
+      }
+      break;
+
+    case STATE_COM_BLOCK_SLASH:
+      if (c == '*') {
+        comment_depth++;
+        state = STATE_COM_BLOCK;
+        break;
+      } else if (c == '/') {
+        state = STATE_COM_BLOCK_SLASH;
+        break;
+      } else if (c == '\n') {
+        current_line++;
+        state = STATE_COM_BLOCK;
+        break;
+      } else if (c == EOF) {
+        return ERR_LEXICAL;
+      } else {
+        state = STATE_COM_BLOCK;
+        break;
+      }
+
+    case STATE_COM_BLOCK_STAR:
+      if (c == '/') {
+        comment_depth--;
+        if (comment_depth == 0) {
+          state = STATE_START;
+          break;
+        } else {
+          state = STATE_COM_BLOCK;
+          break;
+        }
+      } else if (c == '*') {
+        break;
+      } else if (c == EOF) {
+        return ERR_LEXICAL;
+      } else if (c == '\n') {
+        current_line++;
+        state = STATE_COM_BLOCK;
+        break;
+      } else {
+        state = STATE_COM_BLOCK;
+        break;
+      }
+
+    /* --- IDENTIFIERS AND KEYWORDS --- */
+    case STATE_KW_IDENTIFIER:
+      break;
+
+    case STATE_UNDERSCORE:
+      break;
+
+    /* --- NUMBERS --- */
+    case STATE_ZERO:
+      break;
+
+    case STATE_INT:
+      break;
+
+    case STATE_INT_UNDERSCORE:
+      break;
+
+    case STATE_DOT_CHECK:
+      break;
+
+    case STATE_NUM_DOT:
+      break;
+
+    case STATE_DOT:
+      break;
+
+    case STATE_DOUBLE:
+      break;
+
+    case STATE_DOUBLE_UNDERSCORE:
+      break;
+
+    case STATE_EXPONENT:
+      break;
+
+    case STATE_SIGN:
+      break;
+
+    case STATE_EXPONENT_FINAL:
+      break;
+
+    case STATE_EXP_UNDERSCORE:
+      break;
+
+    case STATE_D_SUFIX:
+      break;
+
+    /* --- STRINGS --- */
+    case STATE_QUOTE_1:
+      break;
+
+    case STATE_STRING:
+      break;
+
+    case STATE_STRING_ESCAPE:
+      break;
+
+    case STATE_STRING_END:
+      break;
+
+    case STATE_QUOTE_2:
+      break;
+
+    case STATE_MSTR:
+      break;
+
+    case STATE_MSTR_END_1:
+      break;
+
+    case STATE_MSTR_END_2:
+      break;
+
+    case STATE_MSTR_END_3:
+      break;
 
     case STATE_START:
 
@@ -399,7 +630,6 @@ int scanner_get_next_token(Token *token) {
         at_line_start = false;
         state = STATE_NOT;
       } else if (c == '/') {
-        at_line_start = false;
         state = STATE_SLASH;
       }
 
