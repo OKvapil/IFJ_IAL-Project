@@ -223,6 +223,19 @@ bool gen_expr(const AstNode *node) {
   }
 }
 
+bool gen_statement(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  switch (node->kind) {
+  case AST_ASSIGN:
+    return gen_assign(node);
+  default:
+    return false;
+  }
+}
+
 bool gen_program_start(const char *main_name) {
   if (main_name == NULL) {
     return false;

@@ -26,6 +26,15 @@
 bool gen_expr(const AstNode *node);
 
 /**
+ * @brief Generates code for one statement
+ *
+ * @param node Statement node
+ *
+ * @return true on success, false on allocation error (compiler ends with 99)
+ */
+bool gen_statement(const AstNode *node);
+
+/**
  * @brief Generates start of the program
  *
  * Prints the header, defines global variables, calls the main function and ends
