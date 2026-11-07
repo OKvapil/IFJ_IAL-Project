@@ -154,8 +154,9 @@ static bool gen_assign(const AstNode *node) {
     return false;
   }
 
-  char name [256];
-  if (!var_name(name, sizeof(name), node->data.expr_assign.name, node->var_id)) {
+  char name[256];
+  if (!var_name(name, sizeof(name), node->data.expr_assign.name,
+                node->var_id)) {
     return false;
   }
 
@@ -163,7 +164,10 @@ static bool gen_assign(const AstNode *node) {
     return false;
   }
 
-  
+  if (needs_int2float(node->data.expr_assign.value->result_type,
+                      node->result_type)) {
+    codegen_int2floats();
+  }
 
   codegen_pops(name);
   return true;
