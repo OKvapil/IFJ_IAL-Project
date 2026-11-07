@@ -34,6 +34,18 @@ static bool fn_label(char *buff, size_t size, const char *name) {
   return true;
 }
 
+static bool var_name(char *buff, size_t size, const char *name, int var_id) {
+  if (name == NULL) {
+    return false;
+  }
+
+  int len = snprintf(buff, size, "LF@%s$%d", name, var_id);
+  if (len < 0 || (size_t)len >= size) {
+    return false;
+  }
+  return true;
+}
+
 static bool gen_binary(const AstNode *node) {
   if (node == NULL || node->data.binary.left == NULL ||
       node->data.binary.right == NULL) {
@@ -171,18 +183,10 @@ bool gen_expr(const AstNode *node) {
     return true;
   }
   case AST_IDENTIFIER: {
-    if (node->data.text == NULL) {
-      return false;
-    }
-
     char name[256];
-
-    int len =
-        snprintf(name, sizeof(name), "LF@%s$%d", node->data.text, node->var_id);
-    if (len < 0 || (size_t)len >= sizeof(name)) {
+    if (!var_name(name, sizeof(name), node->data.text, node->var_id)) {
       return false;
     }
-
     codegen_pushs(name);
     return true;
   }
