@@ -102,6 +102,22 @@ static void scanner_buffer_free(scanner_buffer_t *buf) {
   buf->capacity = 0;
 }
 
+// ---------- keyword struct
+typedef struct {
+  const char *keyword;
+  TokenType type;
+} keyword_entry_t;
+
+static const keyword_entry_t KEYWORDS[] = {
+    {"def", TOKEN_KW_DEF},       {"do", TOKEN_KW_DO},
+    {"Double", TOKEN_KW_DOUBLE}, {"else", TOKEN_KW_ELSE},
+    {"if", TOKEN_KW_IF},         {"import", TOKEN_KW_IMPORT},
+    {"Int", TOKEN_KW_INT},       {"return", TOKEN_KW_RETURN},
+    {"String", TOKEN_KW_STRING}, {"then", TOKEN_KW_THEN},
+    {"Unit", TOKEN_KW_UNIT},     {"val", TOKEN_KW_VAL},
+    {"var", TOKEN_KW_VAR},       {"while", TOKEN_KW_WHILE},
+};
+
 // ---------- DFA states
 typedef enum scanner_state_e {
   STATE_START, // Initial state
@@ -405,12 +421,12 @@ int scanner_get_next_token(Token *token) {
 
     case STATE_COM_BLOCK:
       if (c == EOF) {
-        return ERR_LEXICAL;
+        return ERR_LEXICAL; // Unclosed block comment
       } else if (c == '*') {
-        state = STATE_COM_BLOCK_STAR;
+        state = STATE_COM_BLOCK_STAR; // Potential comment close
         break;
       } else if (c == '/') {
-        state = STATE_COM_BLOCK_SLASH;
+        state = STATE_COM_BLOCK_SLASH; // Potential nested comment start
         break;
       } else if (c == '\n') {
         current_line++;
@@ -420,11 +436,11 @@ int scanner_get_next_token(Token *token) {
 
     case STATE_COM_BLOCK_SLASH:
       if (c == '*') {
-        comment_depth++;
+        comment_depth++; // Nested comment detected (/*)
         state = STATE_COM_BLOCK;
         break;
       } else if (c == '/') {
-        state = STATE_COM_BLOCK_SLASH;
+        state = STATE_COM_BLOCK_SLASH; // Multiple slashes (e.g. ///)
         break;
       } else if (c == '\n') {
         current_line++;
@@ -439,16 +455,16 @@ int scanner_get_next_token(Token *token) {
 
     case STATE_COM_BLOCK_STAR:
       if (c == '/') {
-        comment_depth--;
+        comment_depth--; // Closed current comment level (*/)
         if (comment_depth == 0) {
-          state = STATE_START;
+          state = STATE_START; // All nested levels closed
           break;
         } else {
           state = STATE_COM_BLOCK;
           break;
         }
       } else if (c == '*') {
-        break;
+        break; // Multiple stars (e.g. /***)
       } else if (c == EOF) {
         return ERR_LEXICAL;
       } else if (c == '\n') {
@@ -462,10 +478,31 @@ int scanner_get_next_token(Token *token) {
 
     /* --- IDENTIFIERS AND KEYWORDS --- */
     case STATE_KW_IDENTIFIER:
-      break;
+      if (isalnum(c) || c == '_') {
+        scanner_buffer_append(&s_buf, c);
+        break;
+      } else {
+        ungetc(c, source_file);
+        token->type = TOKEN_IDENTIFIER;
+        token->line = current_line;
+        for (size_t i = 0; i < sizeof(KEYWORDS) / sizeof(KEYWORDS[0]); i++) {
+          if (strcmp(KEYWORDS[i].keyword, s_buf.data) == 0) {
+            token->type = KEYWORDS[i].type;
+            return 0;
+          }
+        }
+        token->attr.str_val = strdup(s_buf.data);
+        return 0;
+      }
 
     case STATE_UNDERSCORE:
-      break;
+      if (isalnum(c) || c == '_') {
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_KW_IDENTIFIER;
+        break;
+      } else {
+        return ERR_LEXICAL;
+      }
 
     /* --- NUMBERS --- */
     case STATE_ZERO:
