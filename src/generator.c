@@ -21,6 +21,19 @@ static bool needs_int2float(DataType type1, DataType type2) {
   return false;
 }
 
+// Function label creation
+static bool fn_label(char *buff, size_t size, const char *name) {
+  if (name == NULL) {
+    return false;
+  }
+
+  int len = snprintf(buff, size, "$fn_%s", name);
+  if (len < 0 || (size_t)len >= size) {
+    return false;
+  }
+  return true;
+}
+
 static bool gen_binary(const AstNode *node) {
   if (node == NULL || node->data.binary.left == NULL ||
       node->data.binary.right == NULL) {
@@ -180,18 +193,6 @@ bool gen_expr(const AstNode *node) {
   default:
     return false;
   }
-}
-
-static bool fn_label(char *buff, size_t size, const char *name) {
-  if (name == NULL) {
-    return false;
-  }
-
-  int len = snprintf(buff, size, "$fn_%s", name);
-  if (len < 0 || (size_t)len >= size) {
-    return false;
-  }
-  return true;
 }
 
 bool gen_program_start(const char *main_name) {
