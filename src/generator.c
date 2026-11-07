@@ -46,6 +46,18 @@ static bool var_name(char *buff, size_t size, const char *name, int var_id) {
   return true;
 }
 
+static bool flow_label(char *buff, size_t size, int id, const char *kind) {
+  if (kind == NULL) {
+    return false;
+  }
+
+  int len = snprintf(buff, size, "$L%d_%s", id, kind);
+  if (len < 0 || (size_t)len >= size) {
+    return false;
+  }
+  return true;
+}
+
 static bool gen_binary(const AstNode *node) {
   if (node == NULL || node->data.binary.left == NULL ||
       node->data.binary.right == NULL) {
@@ -223,6 +235,39 @@ bool gen_expr(const AstNode *node) {
   }
 }
 
+static bool gen_while(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+  char name_start[256];
+  char name_end[256];
+  int id = codegen_new_label_id();
+
+  if (!flow_label(name_start, sizeof(name_start), id, "while")) {
+    return false;
+  }
+  if (!flow_label(name_end, sizeof(name_end), id, "while_end")) {
+    return false;
+  }
+
+  codegen_label(name_start);
+
+  if (!gen_expr(node->data.while_state.cond)) {
+    return false;
+  }
+  codegen_pushs("bool@false");
+  codegen_jumpifeqs(name_end);
+
+  if (!gen_statement(node->data.while_state.block)) {
+    return false;
+  }
+  codegen_jump(name_start);
+
+  codegen_label(name_end);
+
+  return true;
+}
+
 bool gen_statement(const AstNode *node) {
   if (node == NULL) {
     return false;
@@ -231,6 +276,8 @@ bool gen_statement(const AstNode *node) {
   switch (node->kind) {
   case AST_ASSIGN:
     return gen_assign(node);
+  case AST_WHILE:
+    return gen_while(node);
   default:
     return false;
   }
