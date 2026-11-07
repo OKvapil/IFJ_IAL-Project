@@ -268,6 +268,50 @@ static bool gen_while(const AstNode *node) {
   return true;
 }
 
+static bool gen_if(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  char name_else[256];
+  char name_end[256];
+  int id = codegen_new_label_id();
+
+  if (!flow_label(name_else, sizeof(name_else), id, "else")) {
+    return false;
+  }
+  if (!flow_label(name_end, sizeof(name_end), id, "if_end")) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.if_state.cond)) {
+    return false;
+  }
+  codegen_pushs("bool@false");
+
+  if (node->data.if_state.else_block != NULL) {
+    codegen_jumpifeqs(name_else);
+  } else {
+    codegen_jumpifeqs(name_end);
+  }
+
+  if (!gen_statement(node->data.if_state.then_block)) {
+    return false;
+  }
+
+  if (node->data.if_state.else_block != NULL) {
+    codegen_jump(name_end);
+    codegen_label(name_else);
+    if (!gen_statement(node->data.if_state.else_block)) {
+      return false;
+    }
+  }
+
+  codegen_label(name_end);
+
+  return true;
+}
+
 bool gen_statement(const AstNode *node) {
   if (node == NULL) {
     return false;
@@ -278,6 +322,8 @@ bool gen_statement(const AstNode *node) {
     return gen_assign(node);
   case AST_WHILE:
     return gen_while(node);
+  case AST_IF:
+    return gen_if(node);
   default:
     return false;
   }
