@@ -149,6 +149,26 @@ static bool gen_unary(const AstNode *node) {
   return true;
 }
 
+static bool gen_assign(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  char name [256];
+  if (!var_name(name, sizeof(name), node->data.expr_assign.name, node->var_id)) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.expr_assign.value)) {
+    return false;
+  }
+
+  
+
+  codegen_pops(name);
+  return true;
+}
+
 bool gen_expr(const AstNode *node) {
   if (node == NULL) {
     return false;
