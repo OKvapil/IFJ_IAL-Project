@@ -253,3 +253,18 @@ DeclarationCode st_declare_fun(SymTable *symtable, const char *name,
 
   return DECL_OK;
 }
+
+Symbol *st_lookup(const SymTable *symtable, const char *name) {
+  SymScope *tmp = symtable->current_scope;
+
+  while (tmp != NULL) {
+    Entry *ht_entry = ht_find(tmp->table, name);
+    if (ht_entry != NULL) {
+      return (Symbol *)ht_entry->data;
+    }
+
+    tmp = tmp->outer;
+  }
+
+  return NULL;
+}
