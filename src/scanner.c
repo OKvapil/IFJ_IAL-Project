@@ -148,7 +148,6 @@ typedef enum scanner_state_e {
   STATE_MSTR,          // In multi-line (""")
   STATE_MSTR_END_1,    // Wait: 1st '"' of """
   STATE_MSTR_END_2,    // Wait: 2nd '"' of """
-  STATE_MSTR_END_3,    // Final: closed """
 
   /* --- Operators and Delimiters --- */
   STATE_ASSIGN,       // Decision for '=' or '=='
@@ -770,16 +769,70 @@ int scanner_get_next_token(Token *token) {
       }
 
     case STATE_MSTR:
-      break;
+      if (c == EOF) {
+        // unterminated string literal
+        return ERR_LEXICAL;
+      } else if (c == '"') {
+        // string ending quote 1
+        state = STATE_MSTR_END_1;
+        break;
+      } else if (c == '\n') {
+        current_line++;
+        scanner_buffer_append(&s_buf, c);
+        break;
+      } else {
+        // string body
+        scanner_buffer_append(&s_buf, c);
+        break;
+      }
 
     case STATE_MSTR_END_1:
-      break;
+      if (c == EOF) {
+        // unterminated string literal
+        return ERR_LEXICAL;
+      } else if (c == '"') {
+        // string ending quote 2
+        state = STATE_MSTR_END_2;
+        break;
+      } else if (c == '\n') {
+        current_line++;
+        scanner_buffer_append(&s_buf, '"');
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_MSTR;
+        break;
+      } else {
+        // string body
+        scanner_buffer_append(&s_buf, '"');
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_MSTR;
+        break;
+      }
 
     case STATE_MSTR_END_2:
-      break;
-
-    case STATE_MSTR_END_3:
-      break;
+      if (c == EOF) {
+        // unterminated string literal
+        return ERR_LEXICAL;
+      } else if (c == '"') {
+        // string end
+        token->type = TOKEN_STRING_LIT;
+        token->line = current_line;
+        token->attr.str_val = strdup(s_buf.data);
+        return 0;
+      } else if (c == '\n') {
+        current_line++;
+        scanner_buffer_append(&s_buf, '"');
+        scanner_buffer_append(&s_buf, '"');
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_MSTR;
+        break;
+      } else {
+        // string body
+        scanner_buffer_append(&s_buf, '"');
+        scanner_buffer_append(&s_buf, '"');
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_MSTR;
+        break;
+      }
 
     case STATE_START:
 
