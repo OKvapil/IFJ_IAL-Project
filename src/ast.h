@@ -110,22 +110,23 @@ typedef struct AstNode {
   } data;
 } AstNode;
 
-AstNode *ast_binary(TokenType op, AstNode *left, AstNode *right, size_t line);
-AstNode *ast_unary(TokenType op, AstNode *operand, size_t line);
 AstNode *ast_if(AstNode *cond, AstNode *then_block, AstNode *else_block,
                 size_t line);
 AstNode *ast_while(AstNode *cond, AstNode *block, size_t line);
 AstNode *ast_expr_assign(char *name, AstNode *value, size_t line);
-AstNode *ast_func_call(char *name, AstNode **args, size_t arg_count,
-                       size_t line);
+AstNode *ast_binary(TokenType op, AstNode *left, AstNode *right, size_t line);
+AstNode *ast_unary(TokenType op, AstNode *operand, size_t line);
 AstNode *ast_from_token(Token *value);
-AstNode *ast_block_add_stmt(AstNode *block, AstNode *statement);
 AstNode *ast_block(void);
+AstNode *ast_block_add_stmt(AstNode *block, AstNode *statement);
 AstNode *ast_var_decl(AstKind kind, char *name, DataType type,
                       AstNode *init_expr, size_t line);
 
 AstNode *ast_func_def(char *name, DataType return_type, AstNode *params,
-                      size_t param_count, AstNode *block, bool is_main, size_t line);
+                      size_t param_count, AstNode *block, bool is_main,
+                      size_t line);
+AstNode *ast_func_call(char *name, AstNode **args, size_t arg_count,
+                       size_t line);
 AstNode *ast_free(AstNode *node);
 AstNode *ast_return(AstNode *expr, size_t line);
 

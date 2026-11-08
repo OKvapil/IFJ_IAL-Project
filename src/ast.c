@@ -75,9 +75,9 @@ AstNode *ast_unary(TokenType op, AstNode *operand, size_t line) {
     return NULL;
   }
   node->kind = AST_UNARY;
-  node->data.unary.op = op;
   node->line = line;
   node->var_id = 0;
+  node->data.unary.op = op;
   node->data.unary.operand = operand;
   node->result_type = TYPE_UNKNOWN;
   return node;
@@ -120,16 +120,17 @@ AstNode *ast_from_token(Token *value) {
   return node;
 }
 
-AstNode *ast_return(AstNode *expr, size_t line) {
+AstNode *ast_block(void) {
   AstNode *node = malloc(sizeof(AstNode));
   if (node == NULL) {
     return NULL;
   }
-
-  node->data.return_state.expression = expr;
+  node->kind = AST_BLOCK;
+  node->line = 0;
   node->var_id = 0;
-  node->line = line;
-  node->kind = AST_RETURN;
+  node->data.block.capacity = 0;
+  node->data.block.count = 0;
+  node->data.block.statements = NULL;
   node->result_type = TYPE_UNKNOWN;
   return node;
 }
@@ -155,21 +156,6 @@ AstNode *ast_block_add_stmt(AstNode *block, AstNode *statement) {
   return block;
 }
 
-AstNode *ast_block(void) {
-  AstNode *node = malloc(sizeof(AstNode));
-  if (node == NULL) {
-    return NULL;
-  }
-  node->line = 0;
-  node->var_id = 0;
-  node->result_type = TYPE_UNKNOWN;
-  node->kind = AST_BLOCK;
-  node->data.block.capacity = 0;
-  node->data.block.count = 0;
-  node->data.block.statements = NULL;
-  return node;
-}
-
 AstNode *ast_var_decl(AstKind kind, char *name, DataType type,
                       AstNode *init_expr, size_t line) {
   AstNode *node = malloc(sizeof(AstNode));
@@ -178,29 +164,12 @@ AstNode *ast_var_decl(AstKind kind, char *name, DataType type,
   }
 
   node->kind = kind;
-  node->var_id = 0;
   node->line = line;
+  node->var_id = 0;
   node->data.var_dec.name = name;
-  node->result_type = TYPE_UNKNOWN;
   node->data.var_dec.init_expr = init_expr;
   node->data.var_dec.var_type = type;
-  return node;
-}
-
-AstNode *ast_func_call(char *name, AstNode **args, size_t arg_count,
-                       size_t line) {
-  AstNode *node = malloc(sizeof(AstNode));
-  if (node == NULL) {
-    return NULL;
-  }
-
-  node->var_id = 0;
-  node->kind = AST_FUNC_CALL;
-  node->line = line;
   node->result_type = TYPE_UNKNOWN;
-  node->data.func_call.name = name;
-  node->data.func_call.arg_count = arg_count;
-  node->data.func_call.args = args;
   return node;
 }
 
@@ -211,17 +180,32 @@ AstNode *ast_func_def(char *name, DataType return_type, AstNode *params,
   if (node == NULL) {
     return NULL;
   }
-
-  node->var_id = 0;
   node->kind = AST_FUNC_DEF;
   node->line = line;
+  node->var_id = 0;
   node->data.func_def.name = name;
-  node->result_type = return_type;
   node->data.func_def.params = params;
   node->data.func_def.param_count = param_count;
   node->data.func_def.block = block;
   node->data.func_def.is_main = is_main;
   node->data.func_def.return_type = return_type;
+  node->result_type = return_type;
+  return node;
+}
+
+AstNode *ast_func_call(char *name, AstNode **args, size_t arg_count,
+                       size_t line) {
+  AstNode *node = malloc(sizeof(AstNode));
+  if (node == NULL) {
+    return NULL;
+  }
+  node->kind = AST_FUNC_CALL;
+  node->line = line;
+  node->var_id = 0;
+  node->data.func_call.name = name;
+  node->data.func_call.arg_count = arg_count;
+  node->data.func_call.args = args;
+  node->result_type = TYPE_UNKNOWN;
   return node;
 }
 
@@ -253,13 +237,13 @@ AstNode *ast_free(AstNode *node) {
     break;
   case AST_FUNC_CALL:
     free(node->data.func_call.name);
-    for (int i = 0; i < node->data.func_call.arg_count; i++) {
+    for (size_t i = 0; i < node->data.func_call.arg_count; i++) {
       ast_free(node->data.func_call.args[i]);
     }
     free(node->data.func_call.args);
     break;
   case AST_BLOCK:
-    for (int i = 0; i < node->data.block.count; i++) {
+    for (size_t i = 0; i < node->data.block.count; i++) {
       ast_free(node->data.block.statements[i]);
     }
     free(node->data.block.statements);
@@ -286,7 +270,22 @@ AstNode *ast_free(AstNode *node) {
   case AST_RETURN:
     ast_free(node->data.return_state.expression);
     break;
+  default:
+    break;
   }
   free(node);
   return NULL;
+}
+
+AstNode *ast_return(AstNode *expr, size_t line) {
+  AstNode *node = malloc(sizeof(AstNode));
+  if (node == NULL) {
+    return NULL;
+  }
+  node->kind = AST_RETURN;
+  node->line = line;
+  node->var_id = 0;
+  node->data.return_state.expression = expr;
+  node->result_type = TYPE_UNKNOWN;
+  return node;
 }
