@@ -91,3 +91,27 @@ SymTable *st_init(void) {
 
   return new_symtable;
 }
+
+/**
+ * @brief Frees the current scope, its symbols, and moves to the outer scope.
+ *
+ * @param symtable The symtable whose current scope to delete.
+ */
+static void pop_scope(SymTable *symtable) {
+  ht_dispose(symtable->current_scope->table, free_symbol);
+  SymScope *to_free = symtable->current_scope;
+  symtable->current_scope = symtable->current_scope->outer;
+  free(to_free);
+}
+
+void st_dispose(SymTable *symtable) {
+  if (symtable == NULL) {
+    return;
+  }
+
+  while (symtable->current_scope != NULL) {
+    pop_scope(symtable);
+  }
+
+  free(symtable);
+}
