@@ -1,4 +1,16 @@
-#pragma once
+/**
+ * @file symtable.h
+ * @brief Symbol table with scope handling for the semantic analysis.
+ * 
+ * Built on top of the hash table, one hash table per scope.
+ * 
+ * IFJ/IAL project - IFJ26 compiler
+ * 
+ * @author Jonáš Ľalík (xlalikj00)
+ */
+
+#ifndef SYMTABLE_H
+#define SYMTABLE_H
 
 #include "hashtable.h"
 #include "types.h"
@@ -161,3 +173,5 @@ DeclarationCode st_declare_fun(SymTable *symtable, const char *name,
  * @return A pointer to the found symbol, NULL if not found.
  */
 Symbol *st_lookup(const SymTable *symtable, const char *name);
+
+#endif // SYMTABLE_H
