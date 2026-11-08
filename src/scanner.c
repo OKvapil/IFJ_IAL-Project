@@ -144,7 +144,6 @@ typedef enum scanner_state_e {
   STATE_QUOTE_1,       // Wait: 1st '"'
   STATE_STRING,        // In string literal
   STATE_STRING_ESCAPE, // Wait: '\' escape
-  STATE_STRING_END,    // Final: closed string
   STATE_QUOTE_2,       // Wait/Final: 2nd '"'
   STATE_MSTR,          // In multi-line (""")
   STATE_MSTR_END_1,    // Wait: 1st '"' of """
@@ -654,18 +653,18 @@ int scanner_get_next_token(Token *token) {
 
     case STATE_EXPONENT_FINAL:
       if (isdigit(c)) {
-        //number after exponent
+        // number after exponent
         scanner_buffer_append(&s_buf, c);
         break;
       } else if (c == 'd' || c == 'D') {
         // D suffix
         state = STATE_D_SUFIX;
         break;
-      } else if (c=='_') {
-        //underscore in exponent
-        state=STATE_EXP_UNDERSCORE;
+      } else if (c == '_') {
+        // underscore in exponent
+        state = STATE_EXP_UNDERSCORE;
         break;
-      }else{
+      } else {
         ungetc(c, source_file);
         token->type = TOKEN_DOUBLE_LIT;
         token->line = current_line;
@@ -692,15 +691,43 @@ int scanner_get_next_token(Token *token) {
 
     /* --- STRINGS --- */
     case STATE_QUOTE_1:
-      break;
+      if (c == '"') {
+        // second quote
+        state = STATE_QUOTE_2;
+        break;
+      } else if (c == '\\') {
+        // escape sequence?
+        state = STATE_STRING_ESCAPE;
+        break;
+      } else if (c == EOF || c == '\n') {
+        // unterminated string literal
+        return ERR_LEXICAL;
+      } else {
+        // line string
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_STRING;
+        break;
+      }
 
     case STATE_STRING:
-      break;
+      if (c == '\\') {
+        // escape sequence?
+        state = STATE_STRING_ESCAPE;
+        break;
+      } else if (c == EOF || c == '\n') {
+        // unterminated string literal
+        return ERR_LEXICAL;
+      } else if (c == '"') {
+        token->type = TOKEN_STRING_LIT;
+        token->line = current_line;
+        token->attr.str_val = strdup(s_buf.data);
+        return 0;
+      } else {
+        scanner_buffer_append(&s_buf, c);
+        break;
+      }
 
     case STATE_STRING_ESCAPE:
-      break;
-
-    case STATE_STRING_END:
       break;
 
     case STATE_QUOTE_2:
