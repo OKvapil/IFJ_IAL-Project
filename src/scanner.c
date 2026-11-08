@@ -756,7 +756,18 @@ int scanner_get_next_token(Token *token) {
       break;
 
     case STATE_QUOTE_2:
-      break;
+      if (c == '"') {
+        // multi line string
+        state = STATE_MSTR;
+        break;
+      } else {
+        // empty string
+        ungetc(c, source_file);
+        token->type = TOKEN_STRING_LIT;
+        token->line = current_line;
+        token->attr.str_val = strdup(s_buf.data);
+        return 0;
+      }
 
     case STATE_MSTR:
       break;
