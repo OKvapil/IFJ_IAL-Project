@@ -5,6 +5,7 @@
  * IFJ/IAL project - IFJ26 compiler
  *
  * @author Ondřej Kvapil (xkvapio00)
+ * @author Jonáš Ľalík (xlalikj00)
  */
 
 #ifndef IFJ_IAL_PROJECT_TYPES_H
@@ -20,5 +21,6 @@ typedef enum {
   TYPE_UNIT,
   TYPE_BOOL,
   TYPE_UNKNOWN,
+  TYPE_ANY
 } DataType;
 #endif // IFJ_IAL_PROJECT_TYPES_H
