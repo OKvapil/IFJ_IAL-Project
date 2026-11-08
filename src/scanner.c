@@ -509,10 +509,45 @@ int scanner_get_next_token(Token *token) {
       break;
 
     case STATE_INT:
-      break;
+      // INT
+      if (isdigit(c)) {
+        scanner_buffer_append(&s_buf, c);
+        break;
+
+        // underscore between digits
+      } else if (c == '_') {
+        state = STATE_INT_UNDERSCORE;
+        break;
+
+        // exponent
+      } else if (c == 'e' || c == 'E') {
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_EXPONENT;
+        break;
+
+        // floating point
+      } else if (c == '.') {
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_NUM_DOT;
+        break;
+
+        // return token
+      } else {
+        ungetc(c, source_file);
+        token->type = TOKEN_INT_LIT;
+        token->line = current_line;
+        token->attr.int_val = strtoll(s_buf.data, NULL, 10);
+        return 0;
+      }
 
     case STATE_INT_UNDERSCORE:
-      break;
+      if (isdigit(c)) {
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_INT;
+        break;
+      } else {
+        return ERR_LEXICAL;
+      }
 
     case STATE_DOT_CHECK:
       break;
