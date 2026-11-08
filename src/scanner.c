@@ -588,13 +588,43 @@ int scanner_get_next_token(Token *token) {
         // ERROR: digit must follow dot
         return ERR_LEXICAL;
       }
-      
 
     case STATE_DOUBLE:
-      break;
+      if (isdigit(c)) {
+        // Double
+        scanner_buffer_append(&s_buf, c);
+        break;
+      } else if (c == '_') {
+        // Underscore between digits
+        state = STATE_DOUBLE_UNDERSCORE;
+        break;
+      } else if (c == 'd' || c == 'D') {
+        // D suffix
+        state = STATE_D_SUFIX;
+        break;
+      } else if (c == 'e'|| c=='E'){
+        // Exponent
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_EXPONENT;
+        break;
+      }else{
+        // Return double token
+        ungetc(c, source_file);
+        token->type = TOKEN_DOUBLE_LIT;
+        token->line = current_line;
+        token->attr.float_val = strtod(s_buf.data, NULL);
+        return 0;
+      }
 
     case STATE_DOUBLE_UNDERSCORE:
-      break;
+      if (isdigit(c)) {
+        // Double
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_DOUBLE;
+        break;
+      } else {
+        return ERR_LEXICAL;
+      }
 
     case STATE_EXPONENT:
       break;
@@ -609,7 +639,11 @@ int scanner_get_next_token(Token *token) {
       break;
 
     case STATE_D_SUFIX:
-      break;
+      ungetc(c, source_file);
+      token->type=TOKEN_DOUBLE_LIT;
+      token->line=current_line;
+      token->attr.float_val=strtod(s_buf.data, NULL);
+      return 0;
 
     /* --- STRINGS --- */
     case STATE_QUOTE_1:
