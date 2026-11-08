@@ -115,3 +115,22 @@ void st_dispose(SymTable *symtable) {
 
   free(symtable);
 }
+
+int st_enter_scope(SymTable *symtable) {
+  SymScope *new_scope = malloc(sizeof(SymScope));
+  if (new_scope == NULL) {
+    return -1;
+  }
+
+  HashTable *hash_table = ht_init();
+  if (hash_table == NULL) {
+    free(new_scope);
+    return -1;
+  }
+  new_scope->table = hash_table;
+
+  new_scope->outer = symtable->current_scope;
+  symtable->current_scope = new_scope;
+
+  return 0;
+}
