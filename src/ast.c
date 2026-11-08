@@ -135,17 +135,27 @@ AstNode *ast_return(AstNode *expr, size_t line) {
 }
 
 AstNode *ast_block_add_stmt(AstNode *block, AstNode *statement) {
-  AstNode *node = malloc(sizeof(AstNode));
-  if (node == NULL) {
+  if (block == NULL || statement == NULL) {
     return NULL;
   }
+  if (block->data.block.count >= block->data.block.capacity) {
+    size_t new_cap =
+        (block->data.block.capacity == 0) ? 2 : block->data.block.capacity * 2;
+    AstNode **new_stmts =
+        realloc(block->data.block.statements, new_cap * sizeof(AstNode *));
+    if (new_stmts == NULL) {
+      return NULL;
+    }
+    block->data.block.statements = new_stmts;
+    block->data.block.capacity = new_cap;
+  }
 
-  node->line = statement->line;
-  node->var_id = 0;
-  return node;
+  block->data.block.statements[block->data.block.count] = statement;
+  block->data.block.count++;
+  return block;
 }
 
-AstNode *ast_block(AstNode *block) {
+AstNode *ast_block(void) {
   AstNode *node = malloc(sizeof(AstNode));
   if (node == NULL) {
     return NULL;
@@ -153,7 +163,7 @@ AstNode *ast_block(AstNode *block) {
   node->line = 0;
   node->var_id = 0;
   node->result_type = TYPE_UNKNOWN;
-
+  node->kind = AST_BLOCK;
   node->data.block.capacity = 0;
   node->data.block.count = 0;
   node->data.block.statements = NULL;
@@ -171,15 +181,49 @@ AstNode *ast_var_decl(AstKind kind, char *name, DataType type,
   node->var_id = 0;
   node->line = line;
   node->data.var_dec.name = name;
-  node->result_type = type;
+  node->result_type = TYPE_UNKNOWN;
   node->data.var_dec.init_expr = init_expr;
+  node->data.var_dec.var_type = type;
   return node;
 }
 
 AstNode *ast_func_call(char *name, AstNode **args, size_t arg_count,
-                       size_t line) {}
+                       size_t line) {
+  AstNode *node = malloc(sizeof(AstNode));
+  if (node == NULL) {
+    return NULL;
+  }
 
-AstNode ast_func_def() {}
+  node->var_id = 0;
+  node->kind = AST_FUNC_CALL;
+  node->line = line;
+  node->result_type = TYPE_UNKNOWN;
+  node->data.func_call.name = name;
+  node->data.func_call.arg_count = arg_count;
+  node->data.func_call.args = args;
+  return node;
+}
+
+AstNode *ast_func_def(char *name, DataType return_type, AstNode *params,
+                      size_t param_count, AstNode *block, bool is_main,
+                      size_t line) {
+  AstNode *node = malloc(sizeof(AstNode));
+  if (node == NULL) {
+    return NULL;
+  }
+
+  node->var_id = 0;
+  node->kind = AST_FUNC_DEF;
+  node->line = line;
+  node->data.func_def.name = name;
+  node->result_type = return_type;
+  node->data.func_def.params = params;
+  node->data.func_def.param_count = param_count;
+  node->data.func_def.block = block;
+  node->data.func_def.is_main = is_main;
+  node->data.func_def.return_type = return_type;
+  return node;
+}
 
 AstNode *ast_free(AstNode *node) {
   if (node == NULL) {
@@ -188,31 +232,61 @@ AstNode *ast_free(AstNode *node) {
 
   switch (node->kind) {
   case AST_UNARY:
-    free(node->data.unary.operand);
+    ast_free(node->data.unary.operand);
+    break;
   case AST_BINARY:
-    free(node->data.binary.left);
-    free(node->data.binary.right);
+    ast_free(node->data.binary.left);
+    ast_free(node->data.binary.right);
+    break;
   case AST_IF:
-    free(node->data.if_state.else_block);
-    free(node->data.if_state.then_block);
+    ast_free(node->data.if_state.else_block);
+    ast_free(node->data.if_state.then_block);
+    ast_free(node->data.if_state.cond);
+    break;
   case AST_WHILE:
-    free(node->data.while_state.block);
-    free(node->data.while_state.cond);
+    ast_free(node->data.while_state.block);
+    ast_free(node->data.while_state.cond);
+    break;
   case AST_ASSIGN:
     free(node->data.expr_assign.name);
-    free(node->data.expr_assign.value);
+    ast_free(node->data.expr_assign.value);
     break;
   case AST_FUNC_CALL:
-    free(node->data.func_call.args);
     free(node->data.func_call.name);
+    for (int i = 0; i < node->data.func_call.arg_count; i++) {
+      ast_free(node->data.func_call.args[i]);
+    }
+    free(node->data.func_call.args);
+    break;
   case AST_BLOCK:
+    for (int i = 0; i < node->data.block.count; i++) {
+      ast_free(node->data.block.statements[i]);
+    }
     free(node->data.block.statements);
-    case AST_FUNC_DEF:
-    free(node->data.func_def.block);
+    break;
+  case AST_FUNC_DEF:
+    ast_free(node->data.func_def.block);
     free(node->data.func_def.name);
-    free(node->data.func_def.params);
+    ast_free(node->data.func_def.params);
+    break;
+  case AST_STRING_LIT:
+    free(node->data.text);
+    break;
+  case AST_IDENTIFIER:
+    free(node->data.text);
+    break;
+  case AST_VAL:
+    ast_free(node->data.var_dec.init_expr);
+    free(node->data.var_dec.name);
+    break;
+  case AST_VAR:
+    ast_free(node->data.var_dec.init_expr);
+    free(node->data.var_dec.name);
+    break;
+  case AST_RETURN:
+    ast_free(node->data.return_state.expression);
+    break;
   }
-
   free(node);
   return NULL;
 }
