@@ -602,12 +602,12 @@ int scanner_get_next_token(Token *token) {
         // D suffix
         state = STATE_D_SUFIX;
         break;
-      } else if (c == 'e'|| c=='E'){
+      } else if (c == 'e' || c == 'E') {
         // Exponent
         scanner_buffer_append(&s_buf, c);
         state = STATE_EXPONENT;
         break;
-      }else{
+      } else {
         // Return double token
         ungetc(c, source_file);
         token->type = TOKEN_DOUBLE_LIT;
@@ -627,22 +627,67 @@ int scanner_get_next_token(Token *token) {
       }
 
     case STATE_EXPONENT:
-      break;
+      if (c == '+' || c == '-') {
+        // sign after exponennt
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_SIGN;
+        break;
+      } else if (isdigit(c)) {
+        // number after exponent
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_EXPONENT_FINAL;
+        break;
+      } else {
+        // ERROR
+        return ERR_LEXICAL;
+      }
 
     case STATE_SIGN:
-      break;
+      // digit must be after sign
+      if (isdigit(c)) {
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_EXPONENT_FINAL;
+        break;
+      } else {
+        return ERR_LEXICAL;
+      }
 
     case STATE_EXPONENT_FINAL:
-      break;
+      if (isdigit(c)) {
+        //number after exponent
+        scanner_buffer_append(&s_buf, c);
+        break;
+      } else if (c == 'd' || c == 'D') {
+        // D suffix
+        state = STATE_D_SUFIX;
+        break;
+      } else if (c=='_') {
+        //underscore in exponent
+        state=STATE_EXP_UNDERSCORE;
+        break;
+      }else{
+        ungetc(c, source_file);
+        token->type = TOKEN_DOUBLE_LIT;
+        token->line = current_line;
+        token->attr.float_val = strtod(s_buf.data, NULL);
+        return 0;
+      }
 
     case STATE_EXP_UNDERSCORE:
-      break;
+      if (isdigit(c)) {
+        // return to STATE_EXPONENT_FINAL
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_EXPONENT_FINAL;
+        break;
+      } else {
+        return ERR_LEXICAL;
+      }
 
     case STATE_D_SUFIX:
       ungetc(c, source_file);
-      token->type=TOKEN_DOUBLE_LIT;
-      token->line=current_line;
-      token->attr.float_val=strtod(s_buf.data, NULL);
+      token->type = TOKEN_DOUBLE_LIT;
+      token->line = current_line;
+      token->attr.float_val = strtod(s_buf.data, NULL);
       return 0;
 
     /* --- STRINGS --- */
