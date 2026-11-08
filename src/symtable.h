@@ -127,13 +127,13 @@ int st_exit_scope(SymTable *symtable);
  * @param name The name of the variable.
  * @param type The data type of the variable.
  * @param modifiable Is the variable modifiable.
- * @param new_symbol The newly created variable symbol.
+ * @param return_symbol The newly created variable symbol.
  * @return DECL_OK if successful, DECL_REDEF if redefinition, DECL_ALLOC_FAIL if
  * allocation failure.
  */
 DeclarationCode st_declare_var(SymTable *symtable, const char *name,
                                DataType type, bool modifiable,
-                               Symbol **new_symbol);
+                               Symbol **return_symbol);
 
 /**
  * @brief Declares a function symbol.
@@ -151,7 +151,7 @@ DeclarationCode st_declare_var(SymTable *symtable, const char *name,
  * @param param_count The number of parameters of the function.
  * @param param_types An array of the parameter data types.
  * @param param_names An array of the parameter names.
- * @param new_symbol The newly created function symbol.
+ * @param return_symbol The newly created function symbol.
  * @return DECL_OK if successful, DECL_REDEF if redefinition, DECL_ALLOC_FAIL if
  * allocation failure.
  */
@@ -159,7 +159,7 @@ DeclarationCode st_declare_fun(SymTable *symtable, const char *name,
                                DataType type, int param_count,
                                const DataType *param_types,
                                const char *const *param_names,
-                               Symbol **new_symbol);
+                               Symbol **return_symbol);
 
 /**
  * @brief Looks up a symbol in the symbol table.

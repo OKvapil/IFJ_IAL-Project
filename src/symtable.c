@@ -9,6 +9,7 @@
 
 #include "symtable.h"
 #include <stdlib.h>
+#include <string.h>
 
 /**
  * @brief Frees a symbol and everything it owns.
@@ -142,4 +143,42 @@ int st_exit_scope(SymTable *symtable) {
 
   pop_scope(symtable);
   return 0;
+}
+
+DeclarationCode st_declare_var(SymTable *symtable, const char *name,
+                               DataType type, bool modifiable,
+                               Symbol **return_symbol) {
+    
+  if (ht_find(symtable->current_scope->table, name) != NULL) {
+    return DECL_REDEF;
+  }
+  
+  Symbol *new_symbol = calloc(1, sizeof(Symbol));
+  if (new_symbol == NULL) {
+    return DECL_ALLOC_FAIL;
+  }
+
+  new_symbol->name = malloc(strlen(name) + 1);
+  if (new_symbol->name == NULL) {
+    free(new_symbol);
+    return DECL_ALLOC_FAIL;
+  }
+  strcpy(new_symbol->name, name);
+
+  new_symbol->kind = SYMBOL_VARIABLE;
+  new_symbol->type = type;
+  new_symbol->var_modifiable = modifiable;
+  new_symbol->var_unique_id = symtable->var_counter;
+  
+  if (ht_add(symtable->current_scope->table, name, new_symbol) == NULL) {
+    free_symbol(new_symbol);
+    return DECL_ALLOC_FAIL;
+  }
+
+  if (return_symbol != NULL) {
+    *return_symbol = new_symbol;
+  }
+
+  symtable->var_counter += 1;
+  return DECL_OK;
 }
