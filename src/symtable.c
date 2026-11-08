@@ -134,3 +134,12 @@ int st_enter_scope(SymTable *symtable) {
 
   return 0;
 }
+
+int st_exit_scope(SymTable *symtable) {
+  if (symtable->current_scope->outer == NULL) {
+    return -1;
+  }
+
+  pop_scope(symtable);
+  return 0;
+}
