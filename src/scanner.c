@@ -139,7 +139,6 @@ typedef enum scanner_state_e {
   STATE_EXP_UNDERSCORE,    // Wait: digit after '_' in exp
   STATE_ZERO,              // Final: standalone '0'
   STATE_DOT_CHECK,         // Wait: check if dot is number
-  STATE_DOT,               // Final: standalone dot
 
   /* --- Strings --- */
   STATE_QUOTE_1,       // Wait: 1st '"'
@@ -506,7 +505,30 @@ int scanner_get_next_token(Token *token) {
 
     /* --- NUMBERS --- */
     case STATE_ZERO:
-      break;
+      // exponent
+      if (c == 'e' || c == 'E') {
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_EXPONENT;
+        break;
+
+        // 0. floating point
+      } else if (c == '.') {
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_NUM_DOT;
+        break;
+
+        // ERROR number cannot begin with 0
+      } else if (isdigit(c) || c == '_') {
+        return ERR_LEXICAL;
+
+        // return token
+      } else {
+        ungetc(c, source_file);
+        token->type = TOKEN_INT_LIT;
+        token->line = current_line;
+        token->attr.int_val = strtoll(s_buf.data, NULL, 10);
+        return 0;
+      }
 
     case STATE_INT:
       // INT
@@ -550,12 +572,21 @@ int scanner_get_next_token(Token *token) {
       }
 
     case STATE_DOT_CHECK:
-      break;
+      // double
+      if (isdigit(c)) {
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_DOUBLE;
+        break;
+
+        // standalone dot
+      } else {
+        ungetc(c, source_file);
+        token->type = TOKEN_DOT;
+        token->line = current_line;
+        return 0;
+      }
 
     case STATE_NUM_DOT:
-      break;
-
-    case STATE_DOT:
       break;
 
     case STATE_DOUBLE:
