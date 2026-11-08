@@ -148,11 +148,11 @@ int st_exit_scope(SymTable *symtable) {
 DeclarationCode st_declare_var(SymTable *symtable, const char *name,
                                DataType type, bool modifiable,
                                Symbol **return_symbol) {
-    
+
   if (ht_find(symtable->current_scope->table, name) != NULL) {
     return DECL_REDEF;
   }
-  
+
   Symbol *new_symbol = calloc(1, sizeof(Symbol));
   if (new_symbol == NULL) {
     return DECL_ALLOC_FAIL;
@@ -169,7 +169,7 @@ DeclarationCode st_declare_var(SymTable *symtable, const char *name,
   new_symbol->type = type;
   new_symbol->var_modifiable = modifiable;
   new_symbol->var_unique_id = symtable->var_counter;
-  
+
   if (ht_add(symtable->current_scope->table, name, new_symbol) == NULL) {
     free_symbol(new_symbol);
     return DECL_ALLOC_FAIL;
@@ -180,5 +180,76 @@ DeclarationCode st_declare_var(SymTable *symtable, const char *name,
   }
 
   symtable->var_counter += 1;
+  return DECL_OK;
+}
+
+DeclarationCode st_declare_fun(SymTable *symtable, const char *name,
+                               DataType type, int param_count,
+                               const DataType *param_types,
+                               const char *const *param_names,
+                               Symbol **return_symbol) {
+
+  SymScope *global_scope = symtable->current_scope;
+  while (global_scope->outer != NULL) {
+    global_scope = global_scope->outer;
+  }
+
+  if (ht_find(global_scope->table, name) != NULL) {
+    return DECL_REDEF;
+  }
+
+  Symbol *new_symbol = calloc(1, sizeof(Symbol));
+  if (new_symbol == NULL) {
+    return DECL_ALLOC_FAIL;
+  }
+
+  new_symbol->name = malloc(strlen(name) + 1);
+  if (new_symbol->name == NULL) {
+    free_symbol(new_symbol);
+    return DECL_ALLOC_FAIL;
+  }
+  strcpy(new_symbol->name, name);
+
+  new_symbol->param_count = param_count;
+  if (param_count > 0) {
+    new_symbol->param_types = malloc(param_count * sizeof(DataType));
+    if (new_symbol->param_types == NULL) {
+      free_symbol(new_symbol);
+      return DECL_ALLOC_FAIL;
+    }
+
+    memcpy(new_symbol->param_types, param_types,
+           param_count * sizeof(DataType));
+  }
+
+  if (param_names != NULL && param_count > 0) {
+    new_symbol->param_names = calloc(param_count, sizeof(char *));
+    if (new_symbol->param_names == NULL) {
+      free_symbol(new_symbol);
+      return DECL_ALLOC_FAIL;
+    }
+
+    for (int i = 0; i < param_count; i++) {
+      new_symbol->param_names[i] = malloc(strlen(param_names[i]) + 1);
+      if (new_symbol->param_names[i] == NULL) {
+        free_symbol(new_symbol);
+        return DECL_ALLOC_FAIL;
+      }
+      strcpy(new_symbol->param_names[i], param_names[i]);
+    }
+  }
+
+  new_symbol->kind = SYMBOL_FUNCTION;
+  new_symbol->type = type;
+
+  if (ht_add(global_scope->table, name, new_symbol) == NULL) {
+    free_symbol(new_symbol);
+    return DECL_ALLOC_FAIL;
+  }
+
+  if (return_symbol != NULL) {
+    *return_symbol = new_symbol;
+  }
+
   return DECL_OK;
 }
