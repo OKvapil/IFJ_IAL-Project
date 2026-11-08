@@ -505,24 +505,21 @@ int scanner_get_next_token(Token *token) {
 
     /* --- NUMBERS --- */
     case STATE_ZERO:
-      // exponent
       if (c == 'e' || c == 'E') {
+        // Exponent
         scanner_buffer_append(&s_buf, c);
         state = STATE_EXPONENT;
         break;
-
-        // 0. floating point
       } else if (c == '.') {
+        // 0. floating point
         scanner_buffer_append(&s_buf, c);
         state = STATE_NUM_DOT;
         break;
-
-        // ERROR number cannot begin with 0
       } else if (isdigit(c) || c == '_') {
+        // ERROR: number cannot begin with 0
         return ERR_LEXICAL;
-
-        // return token
       } else {
+        // Return int token
         ungetc(c, source_file);
         token->type = TOKEN_INT_LIT;
         token->line = current_line;
@@ -531,30 +528,26 @@ int scanner_get_next_token(Token *token) {
       }
 
     case STATE_INT:
-      // INT
       if (isdigit(c)) {
+        // Digits
         scanner_buffer_append(&s_buf, c);
         break;
-
-        // underscore between digits
       } else if (c == '_') {
+        // Underscore between digits
         state = STATE_INT_UNDERSCORE;
         break;
-
-        // exponent
       } else if (c == 'e' || c == 'E') {
+        // Exponent
         scanner_buffer_append(&s_buf, c);
         state = STATE_EXPONENT;
         break;
-
-        // floating point
       } else if (c == '.') {
+        // Floating point
         scanner_buffer_append(&s_buf, c);
         state = STATE_NUM_DOT;
         break;
-
-        // return token
       } else {
+        // Return int token
         ungetc(c, source_file);
         token->type = TOKEN_INT_LIT;
         token->line = current_line;
@@ -572,14 +565,13 @@ int scanner_get_next_token(Token *token) {
       }
 
     case STATE_DOT_CHECK:
-      // double
       if (isdigit(c)) {
+        // Double
         scanner_buffer_append(&s_buf, c);
         state = STATE_DOUBLE;
         break;
-
-        // standalone dot
       } else {
+        // Standalone dot
         ungetc(c, source_file);
         token->type = TOKEN_DOT;
         token->line = current_line;
@@ -587,7 +579,16 @@ int scanner_get_next_token(Token *token) {
       }
 
     case STATE_NUM_DOT:
-      break;
+      if (isdigit(c)) {
+        // Double
+        scanner_buffer_append(&s_buf, c);
+        state = STATE_DOUBLE;
+        break;
+      } else {
+        // ERROR: digit must follow dot
+        return ERR_LEXICAL;
+      }
+      
 
     case STATE_DOUBLE:
       break;
