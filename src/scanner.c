@@ -728,6 +728,31 @@ int scanner_get_next_token(Token *token) {
       }
 
     case STATE_STRING_ESCAPE:
+      switch (c) {
+      case '\\':
+        scanner_buffer_append(&s_buf, '\\');
+        state = STATE_STRING;
+        break;
+      case 'n':
+        scanner_buffer_append(&s_buf, '\n');
+        state = STATE_STRING;
+        break;
+      case 'r':
+        scanner_buffer_append(&s_buf, '\r');
+        state = STATE_STRING;
+        break;
+      case 't':
+        scanner_buffer_append(&s_buf, '\t');
+        state = STATE_STRING;
+        break;
+      case '"':
+        scanner_buffer_append(&s_buf, '\"');
+        state = STATE_STRING;
+        break;
+
+      default:
+        return ERR_LEXICAL;
+      }
       break;
 
     case STATE_QUOTE_2:
