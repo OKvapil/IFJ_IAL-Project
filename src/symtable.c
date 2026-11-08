@@ -45,12 +45,12 @@ typedef struct BuiltinFun_t {
 } BuiltinFun;
 
 static const BuiltinFun builtins[] = {
-    {"print", TYPE_UNIT, 1, {TYPE_UNKNOWN}}, // CHANGE TO TYPE_ANY
+    {"print", TYPE_UNIT, 1, {TYPE_ANY}},
     {"readLine", TYPE_STRING, 0, {0}},
     {"readInt", TYPE_INT, 0, {0}},
     {"readDouble", TYPE_DOUBLE, 0, {0}},
     {"readBoolean", TYPE_BOOL, 0, {0}},
-    {"toStr", TYPE_STRING, 1, {TYPE_UNKNOWN}}, // CHANGE TO TYPE_ANY
+    {"toStr", TYPE_STRING, 1, {TYPE_ANY}},
     {"toInt", TYPE_INT, 1, {TYPE_DOUBLE}},
     {"strLength", TYPE_INT, 1, {TYPE_STRING}},
     {"subStr", TYPE_STRING, 3, {TYPE_STRING, TYPE_INT, TYPE_INT}},
