@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ast.h"
+#include "expressions.h"
 
 
 typedef enum { SYMBOL_TERMINAL, SYMBOL_NONTERMINAL, SYMBOL_STOP } SymbolType;
@@ -63,7 +64,7 @@ static OperatorsTable token_to_index(TokenType type) {
             break;
         case TOKEN_INT_LIT:
             return ID;
-        case TOKEN_FLOAT_LIT:
+        case TOKEN_DOUBLE_LIT:
             return ID;
         case TOKEN_STRING_LIT:
             return ID;
@@ -92,6 +93,9 @@ static OperatorsTable token_to_index(TokenType type) {
 typedef struct StackNode {
     SymbolType type;
     OperatorsTable operator;
+    TokenType token_type;
+    size_t line;
+    AstNode *ast_node;
     struct StackNode *next;
 } StackNode;
 
@@ -121,7 +125,8 @@ static int reduce(Stack *s);
 
 static void init_stack(Stack *s);
 
-static void push_stack(Stack *s, SymbolType Type, OperatorsTable operator);
+static int push_stack(Stack *s, SymbolType Type, OperatorsTable operator, TokenType token_type, size_t line,
+                      AstNode *ast_node);
 
 static void pop_stack(Stack *s);
 
@@ -133,7 +138,7 @@ static void stack_free(Stack *s);
 
 static int move_next_token(Token *token);
 
-int parse_expression(Token *token);
+AstNode *parse_expression(Token *token);
 
 static int reduce(Stack *s) {
     if (s->top == NULL) return 2;
@@ -150,7 +155,7 @@ static int reduce(Stack *s) {
     StackNode *second = (first != NULL) ? first->next : NULL;
     StackNode *third = (second != NULL) ? second->next : NULL;
 
-    if (third == NULL || third->next == NULL || third->next->type == SYMBOL_STOP) {
+    if (third == NULL || third->next == NULL || third->next->type != SYMBOL_STOP) {
         return 2;
     }
 
@@ -179,7 +184,8 @@ static int reduce(Stack *s) {
 
 static void init_stack(Stack *s) { s->top = NULL; }
 
-static void push_stack(Stack *s, SymbolType Type, OperatorsTable operator) {
+static int push_stack(Stack *s, SymbolType Type, OperatorsTable operator, TokenType token_type, size_t line,
+                      AstNode *ast_node) {
     StackNode *new_node = malloc(sizeof(StackNode));
     if (new_node == NULL) {
         return 99;
@@ -188,7 +194,12 @@ static void push_stack(Stack *s, SymbolType Type, OperatorsTable operator) {
     new_node->type = Type;
     new_node->next = s->top;
     new_node->operator = operator;
+    new_node->token_type = token_type;
+    new_node->line = line;
+    new_node->ast_node = ast_node;
+    new_node->next = s->top;
     s->top = new_node;
+    return 0;
 }
 
 static void pop_stack(Stack *s) {
@@ -253,53 +264,57 @@ static int move_next_token(Token *token) {
     return scanner_get_next_token(token);
 }
 
-int parse_expression(Token *token) {
+AstNode *parse_expression(Token *token) {
     Stack stack;
     init_stack(&stack);
-    push_stack(&stack, SYMBOL_TERMINAL, DOLLAR);
+    push_stack(&stack, SYMBOL_TERMINAL, DOLLAR, TOKEN_EOF, 0, NULL);
     while (true) {
         StackNode *upper = stack_top_terminal(&stack);
         OperatorsTable a = upper->operator;
         OperatorsTable b = token_to_index(token->type);
         if (a == DOLLAR && b == DOLLAR)
-
             break;
         switch (precedence_table[a][b]) {
             case S:
                 stack_push_after_top_terminal(&stack);
-                push_stack(&stack, SYMBOL_TERMINAL, b);
+                if (b == ID) {
+                    AstNode *leaf = ast_from_token(token);
+                    push_stack(&stack, SYMBOL_TERMINAL, b, token->type, token->line, leaf);
+                } else {
+                    push_stack(&stack, SYMBOL_TERMINAL, b, token->type, token->line, NULL);
+                }
                 if (move_next_token(token) == 1) {
                     stack_free(&stack);
-                    return 1;
+                    exit(1);
                 }
                 break;
             case R:
                 if (reduce(&stack) != 0) {
                     stack_free(&stack);
-                    return 2;
+                    exit(2);
                 }
                 break;
             case E:
-                push_stack(&stack, SYMBOL_TERMINAL, b);
+                push_stack(&stack, SYMBOL_TERMINAL, b, token->type, token->line, NULL);
                 if (move_next_token(token) == 1) {
                     stack_free(&stack);
-                    return 1;
+                    exit(1);
                 }
                 break;
             case X:
                 stack_free(&stack);
-                return 2;
-
+                exit(2);
                 break;
         }
     }
     if (stack.top != NULL && stack.top->type == SYMBOL_NONTERMINAL &&
         stack.top->next != NULL && stack.top->next->type == SYMBOL_TERMINAL &&
         stack.top->next->operator == DOLLAR && stack.top->next->next == NULL) {
+        AstNode *result = stack.top->ast_node;
         stack_free(&stack);
-        return 0;
+        return result;
     } else {
         stack_free(&stack);
-        return 2;
+        exit(2);
     }
 }
