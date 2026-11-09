@@ -102,6 +102,38 @@ static void scanner_buffer_free(scanner_buffer_t *buf) {
   buf->capacity = 0;
 }
 
+// ---------- indentation stack struct
+typedef struct {
+  size_t indentation[128];
+  int top;
+} indent_stack_t;
+
+static indent_stack_t s_stack;
+static size_t pending_dedents;
+
+static void init_stack(indent_stack_t *s_stack) {
+  s_stack->top = 0;
+  s_stack->indentation[0] = 0;
+}
+
+static void push(indent_stack_t *s_stack, size_t level) {
+  if (s_stack->top + 1 < 128) {
+    s_stack->top++;
+    s_stack->indentation[s_stack->top] = level;
+  } else {
+    exit(ERR_INTERNAL);
+  }
+}
+
+static void pop(indent_stack_t *s_stack) {
+  if (s_stack->top > 0) {
+    s_stack->top--;
+  }
+}
+static size_t top_peek(indent_stack_t *s_stack) {
+  return (s_stack->indentation[s_stack->top]);
+}
+
 // ---------- keyword struct
 typedef struct {
   const char *keyword;
@@ -197,7 +229,9 @@ void scanner_init(FILE *source) {
   at_line_start = true;
   space_count = 0;
   has_tab = false;
+  pending_dedents = 0;
   scanner_buffer_init(&s_buf);
+  init_stack(&s_stack);
 }
 
 void scanner_cleanup(void) {
