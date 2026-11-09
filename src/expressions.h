@@ -11,6 +11,8 @@
 #define EXPRESSION_H
 
 #include "token.h"
-void parse_expression(void);
+#include "ast.h"
+
+AstNode *parse_expression(Token *token);
 
 #endif // EXPRESSION_H
