@@ -8,6 +8,7 @@
  */
 
 #include "scanner.h"
+#include "errors.h"
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -15,8 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ERR_INTERNAL 99
-#define ERR_LEXICAL 1
 #define BUFFER_INIT_CAPACITY 32
 
 static FILE *source_file = NULL;
