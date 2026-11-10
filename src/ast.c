@@ -18,7 +18,7 @@ static AstNode *ast_new(AstKind kind, size_t line) {
   }
   node->kind = kind;
   node->line = line;
-  node->var_id = 0;
+  node->var_id = -1;
   node->result_type = TYPE_UNKNOWN;
   return node;
 }
@@ -68,10 +68,11 @@ AstNode *ast_unary(TokenType op, AstNode *operand, size_t line) {
 
 AstNode *ast_from_token(Token *value) {
 
-  AstNode *node = ast_new(AST_INT_LIT, value->line);
   if (value == NULL) {
     return NULL;
   }
+  AstNode *node = ast_new(AST_INT_LIT, value->line);
+
   switch (value->type) {
   case TOKEN_INT_LIT:
     node->kind = AST_INT_LIT;
