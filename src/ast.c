@@ -7,13 +7,14 @@
  * @author Petr Nášel (xnaselp00)
  */
 #include "ast.h"
+#include "errors.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 static AstNode *ast_new(AstKind kind, size_t line) {
   AstNode *node = malloc(sizeof(AstNode));
   if (node == NULL) {
-    exit(99);
+    exit(ERR_INTERNAL);
   }
   node->kind = kind;
   node->line = line;
@@ -119,7 +120,7 @@ AstNode *ast_block_add_stmt(AstNode *block, AstNode *statement) {
     AstNode **new_stmts =
         realloc(block->data.block.statements, new_cap * sizeof(AstNode *));
     if (new_stmts == NULL) {
-      exit(99);
+      exit(ERR_INTERNAL);
     }
     block->data.block.statements = new_stmts;
     block->data.block.capacity = new_cap;
