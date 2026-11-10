@@ -6,6 +6,7 @@
  *
  * @author Filip Haza (xhazafi00)
  */
+#define _POSIX_C_SOURCE 200809L
 
 #include "scanner.h"
 #include "errors.h"
@@ -20,11 +21,11 @@
 
 static FILE *source_file = NULL;
 static size_t current_line = 1;
-static int bracket_depth = 0;
-static bool at_line_start = true;
 static size_t space_count = 0;
-static bool has_tab = false;
+static int bracket_depth = 0;
 static int comment_depth = 0;
+static bool at_line_start = true;
+static bool has_tab = false;
 
 /* ============================================================================
  * Authorship Note:
@@ -391,6 +392,15 @@ int scanner_get_next_token(Token *token) {
 
     case STATE_ANNOT_MAI:
       if (c == 'n') {
+        //@main cannot be followed by alnum or _
+        int next_c = fgetc(source_file);
+        if (isalnum(next_c) || next_c == '_') {
+          return ERR_LEXICAL;
+        }
+        if (next_c != EOF) {
+          ungetc(next_c, source_file);
+        }
+
         token->type = TOKEN_ANNOT_MAIN;
         token->line = current_line;
         return 0;
@@ -546,8 +556,8 @@ int scanner_get_next_token(Token *token) {
         scanner_buffer_append(&s_buf, c);
         state = STATE_NUM_DOT;
         break;
-      } else if (isdigit(c) || c == '_') {
-        // ERROR: number cannot begin with 0
+      } else if (isdigit(c) || c == '_' || isalpha(c)) {
+        // ERROR: number cannot begin with 0 or be followed by letter/underscore
         return ERR_LEXICAL;
       } else {
         // Return int token
@@ -577,6 +587,9 @@ int scanner_get_next_token(Token *token) {
         scanner_buffer_append(&s_buf, c);
         state = STATE_NUM_DOT;
         break;
+      } else if (isalpha(c)) {
+        // ERROR: letter directly after integer (e.g. 123abc)
+        return ERR_LEXICAL;
       } else {
         // Return int token
         ungetc(c, source_file);
@@ -638,6 +651,9 @@ int scanner_get_next_token(Token *token) {
         scanner_buffer_append(&s_buf, c);
         state = STATE_EXPONENT;
         break;
+      } else if (isalpha(c)) {
+        // ERROR: letter directly after double (e.g. 1.5abc)
+        return ERR_LEXICAL;
       } else {
         // Return double token
         ungetc(c, source_file);
@@ -696,6 +712,9 @@ int scanner_get_next_token(Token *token) {
         // underscore in exponent
         state = STATE_EXP_UNDERSCORE;
         break;
+      } else if (isalpha(c)) {
+        // ERROR: letter directly after exponent (e.g. 1e5xyz)
+        return ERR_LEXICAL;
       } else {
         ungetc(c, source_file);
         token->type = TOKEN_DOUBLE_LIT;
@@ -715,6 +734,11 @@ int scanner_get_next_token(Token *token) {
       }
 
     case STATE_D_SUFIX:
+      if (isalnum(c) || c == '_') {
+        // ERROR: alphanumeric/underscore immediately following 'd'/'D' suffix
+        // (e.g. 1.5dx)
+        return ERR_LEXICAL;
+      }
       ungetc(c, source_file);
       token->type = TOKEN_DOUBLE_LIT;
       token->line = current_line;
