@@ -173,13 +173,14 @@ typedef enum scanner_state_e {
   STATE_DOT_CHECK,         // Wait: check if dot is number
 
   /* --- Strings --- */
-  STATE_QUOTE_1,       // Wait: 1st '"'
-  STATE_STRING,        // In string literal
-  STATE_STRING_ESCAPE, // Wait: '\' escape
-  STATE_QUOTE_2,       // Wait/Final: 2nd '"'
-  STATE_MSTR,          // In multi-line (""")
-  STATE_MSTR_END_1,    // Wait: 1st '"' of """
-  STATE_MSTR_END_2,    // Wait: 2nd '"' of """
+  STATE_QUOTE_1,          // Wait: 1st '"'
+  STATE_STRING,           // In string literal
+  STATE_STRING_ESCAPE,    // Wait: '\' escape
+  STATE_QUOTE_2,          // Wait/Final: 2nd '"'
+  STATE_MSTR,             // In multi-line (""")
+  STATE_MSTR_END_1,       // Wait: 1st '"' of """
+  STATE_MSTR_END_2,       // Wait: 2nd '"' of """
+  STATE_MSTR_EXTRA_QUOTE, // extra quotes are part of string
 
   /* --- Operators and Delimiters --- */
   STATE_ASSIGN,       // Decision for '=' or '=='
@@ -532,6 +533,9 @@ int scanner_get_next_token(Token *token) {
           }
         }
         token->attr.str_val = strdup(s_buf.data);
+        if (!token->attr.str_val) {
+          exit(ERR_INTERNAL);
+        }
         return 0;
       }
 
@@ -777,6 +781,9 @@ int scanner_get_next_token(Token *token) {
         token->type = TOKEN_STRING_LIT;
         token->line = current_line;
         token->attr.str_val = strdup(s_buf.data);
+        if (!token->attr.str_val) {
+          exit(ERR_INTERNAL);
+        }
         return 0;
       } else {
         scanner_buffer_append(&s_buf, c);
@@ -822,6 +829,9 @@ int scanner_get_next_token(Token *token) {
         token->type = TOKEN_STRING_LIT;
         token->line = current_line;
         token->attr.str_val = strdup(s_buf.data);
+        if (!token->attr.str_val) {
+          exit(ERR_INTERNAL);
+        }
         return 0;
       }
 
@@ -870,11 +880,10 @@ int scanner_get_next_token(Token *token) {
         // unterminated string literal
         return ERR_LEXICAL;
       } else if (c == '"') {
-        // string end
-        token->type = TOKEN_STRING_LIT;
-        token->line = current_line;
-        token->attr.str_val = strdup(s_buf.data);
-        return 0;
+        // check for extra quotes
+        state = STATE_MSTR_EXTRA_QUOTE;
+        break;
+
       } else if (c == '\n') {
         current_line++;
         scanner_buffer_append(&s_buf, '"');
@@ -889,6 +898,22 @@ int scanner_get_next_token(Token *token) {
         scanner_buffer_append(&s_buf, c);
         state = STATE_MSTR;
         break;
+      }
+    case STATE_MSTR_EXTRA_QUOTE:
+      if (c == '"') {
+        // extra quote
+        scanner_buffer_append(&s_buf, '"');
+        break;
+      } else {
+        // string end
+        ungetc(c, source_file);
+        token->type = TOKEN_STRING_LIT;
+        token->line = current_line;
+        token->attr.str_val = strdup(s_buf.data);
+        if (!token->attr.str_val) {
+          exit(ERR_INTERNAL);
+        }
+        return 0;
       }
 
     case STATE_START:
