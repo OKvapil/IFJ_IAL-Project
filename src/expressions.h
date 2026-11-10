@@ -2,7 +2,6 @@
 #define EXPRESSION_H
 
 #include "token.h"
-
-int parse_expression(Token *token);
+void parse_expression(void);
 
 #endif // EXPRESSION_H
