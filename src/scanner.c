@@ -250,6 +250,14 @@ int scanner_get_next_token(Token *token) {
     return (ERR_INTERNAL);
   }
 
+  // pending dedents have priority
+  if (pending_dedents > 0) {
+    pending_dedents--;
+    token->type = TOKEN_DEDENT;
+    token->line = current_line;
+    return 0;
+  }
+
   // cleanup before next token
   scanner_buffer_clear(&s_buf);
 
@@ -300,6 +308,12 @@ int scanner_get_next_token(Token *token) {
       return 0;
 
     case STATE_EOF:
+      if (s_stack.top > 0) {
+        pop(&s_stack);
+        token->type = TOKEN_DEDENT;
+        token->line = current_line;
+        return 0;
+      }
       token->type = TOKEN_EOF;
       token->line = current_line;
       return 0;
@@ -960,8 +974,62 @@ int scanner_get_next_token(Token *token) {
         }
       }
 
+      /* --- EOF ---*/
+      if (c == EOF) {
+        if (at_line_start || bracket_depth > 0) {
+          state = STATE_EOF;
+          break;
+        }
+        at_line_start = true;
+        token->type=TOKEN_EOL;
+        token->line=current_line;
+        return 0;
+      }
+
+      /*--- INDENTATION CONTROL ---*/
+      if (at_line_start && bracket_depth <= 0) {
+        if (has_tab) {
+          return ERR_LEXICAL;
+        }
+
+        size_t current_indent = top_peek(&s_stack);
+
+        // indent
+        if (space_count > current_indent) {
+          push(&s_stack, space_count);
+          ungetc(c, source_file);
+          at_line_start = false;
+          token->type = TOKEN_INDENT;
+          token->line = current_line;
+          return 0;
+        }
+        // dedent
+        else if (space_count < current_indent) {
+          while (s_stack.top > 0 && space_count < top_peek(&s_stack)) {
+            pop(&s_stack);
+            pending_dedents++;
+          }
+          // wrong indentation
+          if (space_count != top_peek(&s_stack)) {
+            return ERR_LEXICAL;
+          }
+          // return first dedent
+          pending_dedents--;
+          ungetc(c, source_file);
+          at_line_start = false;
+          token->type = TOKEN_DEDENT;
+          token->line = current_line;
+          return 0;
+        }
+        // same indentation
+        at_line_start = false;
+      } else if (at_line_start && bracket_depth > 0) {
+        // inside brackets, indentation is ignored
+        at_line_start = false;
+      }
+
       /* --- IDENTIFIERS AND KEYWORDS --- */
-      else if (isalpha(c) || c == '_') {
+      if (isalpha(c) || c == '_') {
         at_line_start = false;
         scanner_buffer_append(&s_buf, c);
         if (c == '_')
@@ -1039,12 +1107,6 @@ int scanner_get_next_token(Token *token) {
       else if (c == '@') {
         at_line_start = false;
         state = STATE_ANNOT;
-      }
-
-      /* --- EOF ---*/
-      else if (c == EOF) {
-        at_line_start = false;
-        state = STATE_EOF;
       }
 
       else
