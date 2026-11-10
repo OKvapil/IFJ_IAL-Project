@@ -10,7 +10,6 @@
 
 #ifndef PARSER_H
 #define PARSER_H
-#include "token.h"
 
 void check_token(TokenType expected_token);
 
