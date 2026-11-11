@@ -270,8 +270,6 @@ bool gen_expr(const AstNode *node) {
     return gen_binary(node);
   case AST_UNARY:
     return gen_unary(node);
-  case AST_BLOCK:
-    return gen_block(node);
   default:
     return false;
   }
@@ -366,6 +364,8 @@ bool gen_statement(const AstNode *node) {
     return gen_while(node);
   case AST_IF:
     return gen_if(node);
+  case AST_BLOCK:
+    return gen_block(node);
   case AST_VAL:
   case AST_VAR:
     return gen_var_decl(node);
