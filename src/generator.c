@@ -37,7 +37,7 @@ static bool fn_label(char *buff, size_t size, const char *name) {
 }
 
 static bool var_name(char *buff, size_t size, const char *name, int var_id) {
-  if (name == NULL) {
+  if (name == NULL || var_id < 0) {
     return false;
   }
 
@@ -225,6 +225,112 @@ static bool gen_var_decl(const AstNode *node) {
     return false;
   }
   codegen_pops(var);
+  return true;
+}
+
+static bool gen_def_vars(const AstNode *node) {
+  if (node == NULL) {
+    return true;
+  }
+
+  switch (node->kind) {
+  case AST_VAR:
+  case AST_VAL: {
+    char name[256];
+    if (!var_name(name, sizeof(name), node->data.var_dec.name, node->var_id)) {
+      return false;
+    }
+    codegen_defvar(name);
+    return true;
+  }
+
+  case AST_BLOCK:
+    for (size_t i = 0; i < node->data.block.count; i++) {
+      if (!gen_def_vars(node->data.block.statements[i])) {
+        return false;
+      }
+    }
+    return true;
+
+  case AST_IF:
+    if (!gen_def_vars(node->data.if_state.then_block)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.if_state.else_block)) {
+      return false;
+    }
+    return true;
+
+  case AST_WHILE:
+    return gen_def_vars(node->data.while_state.block);
+
+  default:
+    return true;
+  }
+}
+
+static bool gen_function(const AstNode *node) {
+  if (node == NULL || node->kind != AST_FUNC_DEF) {
+    return false;
+  }
+
+  const char *name = node->data.func_def.name;
+  AstNode **params = node->data.func_def.params;
+  size_t param_count = node->data.func_def.param_count;
+  const AstNode *body = node->data.func_def.block;
+
+  if (name == NULL || body == NULL) {
+    return false;
+  }
+  if (params == NULL && param_count > 0) {
+    return false;
+  }
+
+  current_return_type = node->data.func_def.return_type;
+
+  char label[256];
+  if (!fn_label(label, sizeof(label), name)) {
+    return false;
+  }
+  codegen_label(label);
+  codegen_createframe();
+  codegen_pushframe();
+
+  for (size_t i = 0; i < param_count; i++) {
+    if(params[i] == NULL || !gen_def_vars(params[i])) {
+      return false;
+    }
+  }
+
+  if (!gen_def_vars(body)) {
+    return false;
+  }
+
+  char var[256];
+  for (size_t i = param_count; i > 0; i--) {
+    if (!var_name(var, sizeof(var), params[i - 1]->data.var_dec.name, params[i - 1]->var_id)) {
+      return false;
+    }
+    codegen_pops(var);
+  }
+
+  if (body->kind == AST_BLOCK) {
+    if (!gen_statement(body)) {
+      return false;
+    }
+    codegen_pushs("nil@nil");
+    codegen_popframe();
+    codegen_return();
+  } else {
+    if (!gen_expr(body)) {
+      return false;
+    }
+    if (current_return_type == TYPE_DOUBLE && body->result_type == TYPE_INT) {
+      codegen_int2floats();
+    }
+    codegen_popframe();
+    codegen_return();
+  }
   return true;
 }
 
