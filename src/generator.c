@@ -185,6 +185,19 @@ static bool gen_assign(const AstNode *node) {
   return true;
 }
 
+static bool gen_block(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  for (size_t i = 0; i < node->data.block.count; i++) {
+    if (!gen_statement(node->data.block.statements[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool gen_expr(const AstNode *node) {
   if (node == NULL) {
     return false;
@@ -230,6 +243,8 @@ bool gen_expr(const AstNode *node) {
     return gen_binary(node);
   case AST_UNARY:
     return gen_unary(node);
+  case AST_BLOCK:
+    return gen_block(node);
   default:
     return false;
   }
