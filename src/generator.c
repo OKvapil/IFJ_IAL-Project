@@ -198,6 +198,33 @@ static bool gen_block(const AstNode *node) {
   return true;
 }
 
+static bool gen_var_decl(const AstNode *node) {
+  if (node == NULL || (node->kind != AST_VAL && node->kind != AST_VAR)) {
+    return false;
+  }
+
+  const char *name = node->data.var_dec.name;
+  const AstNode *value = node->data.var_dec.init_expr;
+  if (name == NULL || value == NULL) {
+    return false;
+  }
+
+  if (!gen_expr(value)) {
+    return false;
+  }
+
+  if (node->data.var_dec.var_type == TYPE_DOUBLE && value->result_type == TYPE_INT) {
+    codegen_int2floats();
+  }
+
+  char var[256];
+  if (!var_name(var, sizeof(var), name, node->var_id)) {
+    return false;
+  }
+  codegen_pops(var);
+  return true;
+}
+
 bool gen_expr(const AstNode *node) {
   if (node == NULL) {
     return false;
@@ -339,6 +366,9 @@ bool gen_statement(const AstNode *node) {
     return gen_while(node);
   case AST_IF:
     return gen_if(node);
+  case AST_VAL:
+  case AST_VAR:
+    return gen_var_decl(node);
   default:
     return false;
   }
