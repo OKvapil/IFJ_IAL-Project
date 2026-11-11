@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static DataType current_return_type = TYPE_UNKNOWN;
+
 static bool needs_int2float(DataType type1, DataType type2) {
   if (type1 == TYPE_INT && type2 == TYPE_DOUBLE) {
     return true;
@@ -213,7 +215,8 @@ static bool gen_var_decl(const AstNode *node) {
     return false;
   }
 
-  if (node->data.var_dec.var_type == TYPE_DOUBLE && value->result_type == TYPE_INT) {
+  if (node->data.var_dec.var_type == TYPE_DOUBLE &&
+      value->result_type == TYPE_INT) {
     codegen_int2floats();
   }
 
@@ -222,6 +225,30 @@ static bool gen_var_decl(const AstNode *node) {
     return false;
   }
   codegen_pops(var);
+  return true;
+}
+
+static bool gen_return(const AstNode *node) {
+  if (node == NULL || node->kind != AST_RETURN) {
+    return false;
+  }
+
+  const AstNode *expr = node->data.return_state.expression;
+
+  if (expr == NULL) {
+    codegen_pushs("nil@nil");
+  } else {
+    if (!gen_expr(expr)) {
+      return false;
+    }
+    if (current_return_type == TYPE_DOUBLE && expr->result_type == TYPE_INT) {
+      codegen_int2floats();
+    }
+  }
+
+  codegen_popframe();
+  codegen_return();
+
   return true;
 }
 
@@ -369,6 +396,8 @@ bool gen_statement(const AstNode *node) {
   case AST_VAL:
   case AST_VAR:
     return gen_var_decl(node);
+  case AST_RETURN:
+    return gen_return(node);
   default:
     return false;
   }
