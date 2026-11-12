@@ -38,7 +38,7 @@ static const AstNode *program_root = NULL;
 /** @brief Names of the IFJ26 built-in functions, used by is_builtin. */
 static const char *const builtin_names[] = {
     "print", "readLine",  "readInt", "readDouble", "toStr",
-    "toInt", "strLength", "subStr",  "ord",        "chr",
+    "toInt", "strLength", "subStr",  "ord", "chr", "readBoolean",
 };
 
 /**
@@ -78,6 +78,7 @@ static bool is_expr_node(const AstNode *node) {
   case AST_BINARY:
   case AST_UNARY:
   case AST_FUNC_CALL:
+  case AST_BOOL_LIT:
     return true;
   default:
     return false;
@@ -241,6 +242,15 @@ static bool gen_builtin(const char *name, AstNode **args, size_t arg_count) {
     codegen_call("$builtin_ord");
     return true;
   }
+
+  if (strcmp(name, "readBoolean") == 0) {
+    if (arg_count != 0) {
+      return false;
+    }
+    builtin_readbool("GF@$res");
+    codegen_pushs("GF@$res");
+    return true;
+  }
   return false;
 }
 
@@ -310,6 +320,47 @@ static bool flow_label(char *buff, size_t size, int id, const char *kind) {
   return true;
 }
 
+static bool gen_logic(const AstNode *node) {
+  if (node == NULL || node->data.binary.left == NULL || node->data.binary.right == NULL) {
+    return false;
+  }
+
+  const char *short_value;
+  if (node->data.binary.op == TOKEN_AND) {
+    short_value = "bool@false";
+  } else if (node->data.binary.op == TOKEN_OR) {
+    short_value = "bool@true";
+  } else {
+    return false;
+  }
+
+  char name_short[256];
+  char name_end[256];
+  int id = codegen_new_label_id();
+  if (!flow_label(name_short, sizeof(name_short), id, "logic_short")) {
+    return false;
+  }
+  if (!flow_label(name_end, sizeof(name_end), id, "logic_end")) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.binary.left)) {
+    return false;
+  }
+  codegen_pushs(short_value);
+  codegen_jumpifeqs(name_short);
+
+  if (!gen_expr(node->data.binary.right)) {
+    return false;
+  }
+  codegen_jump(name_end);
+  codegen_label(name_short);
+  codegen_pushs(short_value);
+  codegen_label(name_end);
+
+  return true;
+}
+
 /**
  * @brief Generates a binary operation using the data stack.
  *
@@ -325,6 +376,10 @@ static bool gen_binary(const AstNode *node) {
   if (node == NULL || node->data.binary.left == NULL ||
       node->data.binary.right == NULL) {
     return false;
+  }
+
+  if (node->data.binary.op == TOKEN_AND || node->data.binary.op == TOKEN_OR) {
+    return gen_logic(node);
   }
 
   bool int_div =
@@ -400,7 +455,7 @@ static bool gen_binary(const AstNode *node) {
  * @brief Generates a unary operation using the data stack.
  *
  * Unary minus multiplies by -1 (Int) or -1.0 (Double), which keeps -0.0
- * for Double. Unary plus does nothing.
+ * for Double. Unary plus does nothing. Logical negation ! uses NOTS
  *
  * @param node AST_UNARY node.
  * @return true on success, false on an invalid node, operator or type.
@@ -426,6 +481,9 @@ static bool gen_unary(const AstNode *node) {
       return false;
     }
     codegen_muls();
+    break;
+  case TOKEN_NOT:
+    codegen_nots();
     break;
   default:
     return false;
@@ -816,6 +874,15 @@ bool gen_expr(const AstNode *node) {
     return gen_unary(node);
   case AST_FUNC_CALL:
     return gen_call(node);
+  case AST_BOOL_LIT: {
+   char *op = codegen_const_bool(node->data.bool_value);
+    if (op == NULL) {
+      return false;
+    }
+    codegen_pushs(op);
+    free(op);
+    return true;
+  }
   default:
     return false;
   }
