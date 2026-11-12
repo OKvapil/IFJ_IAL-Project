@@ -26,6 +26,15 @@
  */
 static DataType current_return_type = TYPE_UNKNOWN;
 
+/**
+ * @brief Root of the program being generated (block of function
+ *        definitions).
+ *
+ * Set by gen_program and used by find_function to look up the parameter
+ * types of a called function.
+ */
+static const AstNode *program_root = NULL;
+
 /** @brief Names of the IFJ26 built-in functions, used by is_builtin. */
 static const char *const builtin_names[] = {
     "print", "readLine",  "readInt", "readDouble", "toStr",
@@ -93,6 +102,27 @@ static bool is_builtin(const char *name) {
     }
   }
   return false;
+}
+
+/** @brief Finds the definition of a user function by its name.
+ *
+ * @param name Function name (may be NULL).
+ * @return The AST_FUNC_DEF node, or NULL if there is no such function or
+ *         gen_program has not set program_root.
+ */
+static const AstNode *find_function(const char *name) {
+  if (name == NULL || program_root == NULL) {
+    return NULL;
+  }
+  for (size_t i = 0; i < program_root->data.block.count; i++) {
+    const AstNode *func = program_root->data.block.statements[i];
+    if (func != NULL && func->kind == AST_FUNC_DEF &&
+        func->data.func_def.name != NULL &&
+        strcmp(name, func->data.func_def.name) == 0) {
+      return func;
+    }
+  }
+  return NULL;
 }
 
 /**
@@ -675,12 +705,14 @@ static bool gen_return(const AstNode *node) {
 /**
  * @brief Generates a function call.
  *
- * Arguments are pushed from left to right. A built-in function is handled
- * by gen_builtin, a user function by CALL $fn_<name>. The result is left
- * on the data stack.
+ * Arguments are pushed from left to right. For a user function, an Int
+ * argument is converted to Double right after it is pushed if the
+ * parameter is Double. A built-in function is handled by gen_builtin,
+ * a user function by CALL $fn_<name>. The result is left on the data stack.
  *
  * @param node AST_FUNC_CALL node.
- * @return true on success, false on an invalid node or argument.
+ * @return true on success, false on an invalid node or argument, an
+ *         undefined function or a wrong number of arguments.
  */
 static bool gen_call(const AstNode *node) {
   if (node == NULL || node->kind != AST_FUNC_CALL) {
@@ -699,12 +731,28 @@ static bool gen_call(const AstNode *node) {
     return false;
   }
 
+  const AstNode *func = NULL;
+  if (!is_builtin(name)) {
+    func = find_function(name);
+    if (func == NULL || func->data.func_def.param_count != arg_count) {
+      return false;
+    }
+  }
+
   for (size_t i = 0; i < arg_count; i++) {
     if (args[i] == NULL) {
       return false;
     }
     if (!gen_expr(args[i])) {
       return false;
+    }
+
+    if (func != NULL) {
+      const AstNode *param = func->data.func_def.params[i];
+      if (param != NULL && param->data.var_dec.var_type == TYPE_DOUBLE &&
+          args[i]->result_type == TYPE_INT) {
+        codegen_int2floats();
+      }
     }
   }
 
@@ -930,6 +978,8 @@ bool gen_program(const AstNode *root) {
   if (root == NULL || root->kind != AST_BLOCK) {
     return false;
   }
+
+  program_root = root;
 
   const char *main_name = NULL;
   for (size_t i = 0; i < root->data.block.count; i++) {
