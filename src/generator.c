@@ -359,6 +359,41 @@ static bool gen_return(const AstNode *node) {
   return true;
 }
 
+static bool gen_call(const AstNode *node) {
+  if (node == NULL || node->kind != AST_FUNC_CALL) {
+    return false;
+  }
+
+  const char *name = node->data.func_call.name;
+  AstNode **args = node->data.func_call.args;
+  size_t arg_count = node->data.func_call.arg_count;
+
+  if (name == NULL) {
+    return false;
+  }
+
+  if (args == NULL && arg_count > 0) {
+    return false;
+  }
+
+  for (size_t i = 0; i < arg_count; i++) {
+    if (args[i] == NULL) {
+      return false;
+    }
+    if (!gen_expr(args[i])) {
+      return false;
+    }
+  }
+
+  char label[256];
+  if (!fn_label(label, sizeof(label), name)) {
+    return false;
+  }
+  codegen_call(label);
+
+  return true;
+}
+
 bool gen_expr(const AstNode *node) {
   if (node == NULL) {
     return false;
@@ -404,6 +439,8 @@ bool gen_expr(const AstNode *node) {
     return gen_binary(node);
   case AST_UNARY:
     return gen_unary(node);
+  case AST_FUNC_CALL:
+    return gen_call(node);
   default:
     return false;
   }
