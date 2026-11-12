@@ -13,8 +13,14 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static DataType current_return_type = TYPE_UNKNOWN;
+
+static const char *const builtin_names[] = {
+    "print", "readLine",  "readInt", "readDouble", "toStr",
+    "toInt", "strLength", "subStr",  "ord",        "chr",
+};
 
 static bool needs_int2float(DataType type1, DataType type2) {
   if (type1 == TYPE_INT && type2 == TYPE_DOUBLE) {
@@ -40,6 +46,124 @@ static bool is_expr_node(const AstNode *node) {
   default:
     return false;
   }
+}
+
+static bool is_builtin(const char *name) {
+  if (name == NULL) {
+    return false;
+  }
+
+  size_t count = sizeof(builtin_names) / sizeof(builtin_names[0]);
+  for (size_t i = 0; i < count; i++) {
+    if (strcmp(name, builtin_names[i]) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool gen_builtin(const char *name, AstNode **args, size_t arg_count) {
+  if (name == NULL) {
+    return false;
+  }
+
+  if (strcmp(name, "print") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    codegen_pops("GF@$arg");
+    builtin_print("GF@$arg", args[0]->result_type);
+    codegen_pushs("nil@nil");
+    return true;
+  }
+
+  if (strcmp(name, "readLine") == 0) {
+    if (arg_count != 0) {
+      return false;
+    }
+    builtin_readline("GF@$res");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "readInt") == 0) {
+    if (arg_count != 0) {
+      return false;
+    }
+    builtin_readint("GF@$res");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "readDouble") == 0) {
+    if (arg_count != 0) {
+      return false;
+    }
+    builtin_readdouble("GF@$res");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "toStr") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    codegen_pops("GF@$arg");
+    builtin_tostr("GF@$res", "GF@$arg", args[0]->result_type);
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "toInt") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    if (args[0]->result_type == TYPE_INT) {
+      codegen_int2floats();
+    }
+
+    codegen_pops("GF@$arg");
+    builtin_toint("GF@$res", "GF@$arg");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "strLength") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    codegen_pops("GF@$arg");
+    builtin_strlength("GF@$res", "GF@$arg");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "chr") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    codegen_pops("GF@$arg");
+    builtin_chr("GF@$res", "GF@$arg");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "subStr") == 0) {
+    if (arg_count != 3) {
+      return false;
+    }
+    codegen_call("$builtin_substr");
+    return true;
+  }
+
+  if (strcmp(name, "ord") == 0) {
+    if (arg_count != 2) {
+      return false;
+    }
+    codegen_call("$builtin_ord");
+    return true;
+  }
+  return false;
 }
 
 // Function label creation
@@ -412,6 +536,10 @@ static bool gen_call(const AstNode *node) {
     }
   }
 
+  if (is_builtin(name)) {
+    return gen_builtin(name, args, arg_count);
+  }
+
   char label[256];
   if (!fn_label(label, sizeof(label), name)) {
     return false;
@@ -593,6 +721,8 @@ bool gen_program_start(const char *main_name) {
 
   codegen_header();
   codegen_defvar("GF@$trash");
+  codegen_defvar("GF@$arg");
+  codegen_defvar("GF@$res");
   codegen_defvar("GF@$concat_l");
   codegen_defvar("GF@$concat_r");
   codegen_call(label);
