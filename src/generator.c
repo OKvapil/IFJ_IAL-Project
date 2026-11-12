@@ -297,7 +297,7 @@ static bool gen_function(const AstNode *node) {
   codegen_pushframe();
 
   for (size_t i = 0; i < param_count; i++) {
-    if(params[i] == NULL || !gen_def_vars(params[i])) {
+    if (params[i] == NULL || !gen_def_vars(params[i])) {
       return false;
     }
   }
@@ -308,7 +308,8 @@ static bool gen_function(const AstNode *node) {
 
   char var[256];
   for (size_t i = param_count; i > 0; i--) {
-    if (!var_name(var, sizeof(var), params[i - 1]->data.var_dec.name, params[i - 1]->var_id)) {
+    if (!var_name(var, sizeof(var), params[i - 1]->data.var_dec.name,
+                  params[i - 1]->var_id)) {
       return false;
     }
     codegen_pops(var);
@@ -534,4 +535,37 @@ bool gen_program_start(const char *main_name) {
 void gen_program_end(void) {
   builtin_substr_definition();
   builtin_ord_definition();
+}
+
+bool gen_program(const AstNode *root) {
+  if (root == NULL || root->kind != AST_BLOCK) {
+    return false;
+  }
+
+  const char *main_name = NULL;
+  for (size_t i = 0; i < root->data.block.count; i++) {
+    const AstNode *func = root->data.block.statements[i];
+    if (func == NULL || func->kind != AST_FUNC_DEF) {
+      return false;
+    }
+    if (func->data.func_def.is_main) {
+      main_name = func->data.func_def.name;
+    }
+  }
+  if (main_name == NULL) {
+    return false;
+  }
+
+  if (!gen_program_start(main_name)) {
+    return false;
+  }
+
+  for (size_t i = 0; i < root->data.block.count; i++) {
+    if (!gen_function(root->data.block.statements[i])) {
+      return false;
+    }
+  }
+
+  gen_program_end();
+  return true;
 }
