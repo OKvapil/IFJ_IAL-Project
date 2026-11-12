@@ -23,6 +23,25 @@ static bool needs_int2float(DataType type1, DataType type2) {
   return false;
 }
 
+static bool is_expr_node(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  switch (node->kind) {
+  case AST_INT_LIT:
+  case AST_DOUBLE_LIT:
+  case AST_STRING_LIT:
+  case AST_IDENTIFIER:
+  case AST_BINARY:
+  case AST_UNARY:
+  case AST_FUNC_CALL:
+    return true;
+  default:
+    return false;
+  }
+}
+
 // Function label creation
 static bool fn_label(char *buff, size_t size, const char *name) {
   if (name == NULL) {
@@ -269,6 +288,26 @@ static bool gen_def_vars(const AstNode *node) {
   }
 }
 
+static bool gen_return_value(const AstNode *expr) {
+  if (expr == NULL) {
+    codegen_pushs("nil@nil");
+  } else {
+    if (!gen_expr(expr)) {
+      return false;
+    }
+    if (current_return_type == TYPE_UNIT) {
+      codegen_pops("GF@$trash");
+      codegen_pushs("nil@nil");
+    } else if (current_return_type == TYPE_DOUBLE &&
+               expr->result_type == TYPE_INT) {
+      codegen_int2floats();
+    }
+  }
+  codegen_popframe();
+  codegen_return();
+  return true;
+}
+
 static bool gen_function(const AstNode *node) {
   if (node == NULL || node->kind != AST_FUNC_DEF) {
     return false;
@@ -315,23 +354,28 @@ static bool gen_function(const AstNode *node) {
     codegen_pops(var);
   }
 
-  if (body->kind == AST_BLOCK) {
-    if (!gen_statement(body)) {
-      return false;
-    }
-    codegen_pushs("nil@nil");
-    codegen_popframe();
-    codegen_return();
-  } else {
-    if (!gen_expr(body)) {
-      return false;
-    }
-    if (current_return_type == TYPE_DOUBLE && body->result_type == TYPE_INT) {
-      codegen_int2floats();
-    }
-    codegen_popframe();
-    codegen_return();
+  if (body->kind != AST_BLOCK) {
+    return gen_return_value(body);
   }
+
+  size_t count = body->data.block.count;
+  AstNode **statements = body->data.block.statements;
+  for (size_t i = 0; i + 1 < count; i++) {
+    if (!gen_statement(statements[i])) {
+      return false;
+    }
+  }
+
+  if (count > 0 && is_expr_node(statements[count - 1])) {
+    return gen_return_value(statements[count - 1]);
+  }
+
+  if (count > 0 && !gen_statement(statements[count - 1])) {
+    return false;
+  }
+  codegen_pushs("nil@nil");
+  codegen_popframe();
+  codegen_return();
   return true;
 }
 
@@ -339,24 +383,7 @@ static bool gen_return(const AstNode *node) {
   if (node == NULL || node->kind != AST_RETURN) {
     return false;
   }
-
-  const AstNode *expr = node->data.return_state.expression;
-
-  if (expr == NULL) {
-    codegen_pushs("nil@nil");
-  } else {
-    if (!gen_expr(expr)) {
-      return false;
-    }
-    if (current_return_type == TYPE_DOUBLE && expr->result_type == TYPE_INT) {
-      codegen_int2floats();
-    }
-  }
-
-  codegen_popframe();
-  codegen_return();
-
-  return true;
+  return gen_return_value(node->data.return_state.expression);
 }
 
 static bool gen_call(const AstNode *node) {
@@ -543,6 +570,13 @@ bool gen_statement(const AstNode *node) {
   case AST_RETURN:
     return gen_return(node);
   default:
+    if (is_expr_node(node)) {
+      if (!gen_expr(node)) {
+        return false;
+      }
+      codegen_pops("GF@$trash");
+      return true;
+    }
     return false;
   }
 }
