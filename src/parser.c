@@ -49,7 +49,7 @@ static void check_token(TokenType expected_token) {
   if (current_token.type == expected_token) {
     token_clear(&current_token);
     int lex_res = scanner_get_next_token(&current_token);
-    if (lex_res != 0) {
+    if (lex_res != ERR_OK) {
       exit(ERR_LEXICAL);
     }
   } else {
@@ -159,12 +159,22 @@ static AstNode *parse_statement(void) {
     return parse_return_state();
   case TOKEN_IDENTIFIER: {
     char *name = consume_identifier();
-    if (current_token.type == TOKEN_LPAREN) {
-      return parse_func_call(name, line);
+    if (current_token.type == TOKEN_ASSIGN) {
+      check_token(TOKEN_ASSIGN);
+      AstNode *value = parse_expression(&current_token);
+      return ast_expr_assign(name, value, line);
     }
-    check_token(TOKEN_ASSIGN);
-    AstNode *value = parse_expression(&current_token);
-    return ast_expr_assign(name, value, line);
+    AstNode *first;
+    if (current_token.type == TOKEN_LPAREN) {
+      first = parse_func_call(name, line);
+    } else {
+      Token id;
+      id.type = TOKEN_IDENTIFIER;
+      id.line = line;
+      id.attr.str_val = name;
+      first = ast_from_token(&id);
+    }
+    return parse_expression_from(&current_token, first);
   }
   default:
     fprintf(stderr, "Syntax error: expected statement at line %zu\n",
@@ -177,7 +187,8 @@ static AstNode *parse_block(void) {
   check_token(TOKEN_EOL);
   check_token(TOKEN_INDENT);
   AstNode *block = ast_block();
-
+  if (current_token.type = TOKEN_SEMICOLON)
+    check_token(TOKEN_SEMICOLON);
   while (current_token.type != TOKEN_DEDENT) {
     if (current_token.type == TOKEN_EOL) {
       check_token(TOKEN_EOL);
@@ -218,12 +229,15 @@ static AstNode *parse_func_def(bool is_main) {
   check_token(TOKEN_LPAREN);
   AstNode *params = parse_params();
   check_token(TOKEN_RPAREN);
-  check_token(TOKEN_COLON);
-  DataType return_type = parse_type();
+  DataType return_type = TYPE_UNKNOWN;
+  if (current_token.type == TOKEN_COLON) {
+    check_token(TOKEN_COLON);
+    return_type = parse_type();
+  }
   check_token(TOKEN_ASSIGN);
 
   AstNode *block = NULL;
-  if (current_token.type == TOKEN_EOL) {
+  if (current_token.type != (TOKEN_EOL || TOKEN_DEDENT || TOKEN_EOF || TOKEN_SEMICOLON)) {
     block = parse_block();
   } else {
     block = parse_expression(&current_token);
