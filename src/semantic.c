@@ -183,16 +183,68 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     break;
 
   case AST_BLOCK:
+  {
+    if (st_enter_scope(symtable) == -1) {
+      return ERR_INTERNAL;
+    }
+
+    for (size_t i = 0; i < node->data.block.count; i++) {
+      ErrorCode node_result_error = analyze_node(node->data.block.statements[i], symtable);
+      if (node_result_error != ERR_OK) {
+        return node_result_error;
+      }
+    }
+    DataType block_type = TYPE_UNIT;
+    if (node->data.block.count > 0) {
+      block_type = node->data.block.statements[node->data.block.count - 1]->result_type;
+    }
+    node->result_type = block_type;
+    st_exit_scope(symtable);
     break;
+  }
 
   case AST_ASSIGN:
     break;
 
-  case AST_VAL:
-    break;
-
   case AST_VAR:
+  case AST_VAL:
+  {
+    if (node->data.var_dec.init_expr == NULL) {
+      return ERR_INTERNAL;
+    }
+
+    ErrorCode init_result = analyze_node(node->data.var_dec.init_expr, symtable);
+    if (init_result != ERR_OK) {
+      return init_result;
+    }
+
+    if (node->data.var_dec.var_type != TYPE_UNKNOWN) {
+      if (node->data.var_dec.init_expr->result_type != node->data.var_dec.var_type) {
+        return ERR_TYPE;
+      }
+    } else {
+      if (node->data.var_dec.init_expr->result_type == TYPE_UNKNOWN) {
+        return ERR_TYPE;
+      } else {
+        node->data.var_dec.var_type = node->data.var_dec.init_expr->result_type;
+      }
+    }
+
+    Symbol *symbol = NULL;
+    DeclarationCode decl_result = st_declare_var(symtable, node->data.var_dec.name, node->data.var_dec.var_type, node->kind == AST_VAR, &symbol);
+    if (decl_result == DECL_REDEF) {
+      return ERR_REDEFINITION;
+    } else if (decl_result == DECL_ALLOC_FAIL) {
+      return ERR_INTERNAL;
+    }
+
+    node->var_id = symbol->var_unique_id;
+    
+    node->result_type = TYPE_UNIT;
+ 
     break;
+  }
+    
   }
 
   return ERR_OK;
