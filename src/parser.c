@@ -45,6 +45,16 @@ static AstNode *parse_params(void);
 
 static AstNode *parse_func_main(void);
 
+/**
+ * @brief Function expects token, if current_token is correct (expected), we
+ * clear current token with token_clear function and get next token from
+ * scanner_get_next_token function and end a function.
+ * If token is not expected, we print an error message and exit function with
+ * error code ERR_SYNTAX.
+ * If next token after expected_token dont return ERR_OK, we exit with
+ * ERR_LEXICAL.
+ * @param expected_token Expected token on input
+ **/
 static void check_token(TokenType expected_token) {
   if (current_token.type == expected_token) {
     token_clear(&current_token);
@@ -60,6 +70,11 @@ static void check_token(TokenType expected_token) {
   }
 }
 
+/**
+ * @brief Function will return an identifier if current_token.type equals to
+ * TOKEN_IDENTIFIER, if not, function will exit with ERR_SYNTAX.
+ * @return identifier(name)
+ **/
 static char *consume_identifier(void) {
   if (current_token.type != TOKEN_IDENTIFIER) {
     fprintf(stderr, "Syntax error: expected identifier at line %zu\n",
@@ -79,6 +94,13 @@ AstNode *parser_parse(void) {
   return parse_program();
 }
 
+/**
+ * @brief Function is inside of parentheses, reading the arguments until we end
+ * up reading right parenthesis
+ * @param name identifier of function
+ * @param line line number
+ * @return identifier(name)
+ **/
 static AstNode *parse_func_call(char *name, size_t line) {
   check_token(TOKEN_LPAREN);
   AstNode *args_block = ast_block();
@@ -102,6 +124,13 @@ static AstNode *parse_func_call(char *name, size_t line) {
   return ast_func_call(name, args, arg_count, line);
 }
 
+/**
+ * @brief Function expect there is import keyword at the beginning of the file,
+ * then go inside the program block and continue until it stops at EOF.
+ * Function also checks if is inside the main func or def func, if not,
+ * exit with ERR_SYNTAX
+ * @return complete AstNode of program
+ **/
 static AstNode *parse_program(void) {
   parse_import();
   AstNode *program = ast_block();
@@ -127,6 +156,10 @@ static AstNode *parse_program(void) {
   return program;
 }
 
+/**
+ * @brief Function checks the correct order of "import" in the beggining of
+ * file.
+ **/
 static void parse_import(void) {
   check_token(TOKEN_KW_IMPORT);
   check_token(TOKEN_IDENTIFIER);
@@ -134,6 +167,11 @@ static void parse_import(void) {
   check_token(TOKEN_MUL);
 }
 
+/**
+ * @brief Function checks different types of keyword tokens, for every type
+ * decide how this keyword behaves and returns function for its next processing
+ * @return valid AstNode statement
+ **/
 static AstNode *parse_statement(void) {
   size_t line = current_token.line;
   switch (current_token.type) {
@@ -183,6 +221,11 @@ static AstNode *parse_statement(void) {
   }
 }
 
+/**
+ * @brief Function checks different types of keyword tokens, for every type
+ * decide how this keyword behaves and returns function for its next processing
+ * @return block
+ **/
 static AstNode *parse_block(void) {
   check_token(TOKEN_EOL);
   check_token(TOKEN_INDENT);
@@ -202,6 +245,11 @@ static AstNode *parse_block(void) {
   return block;
 }
 
+/**
+ * @brief check the current token and return it, if token is invalid, exit with
+ * ERR_SYNTAX
+ * @return data type
+ **/
 static DataType parse_type(void) {
   switch (current_token.type) {
   case TOKEN_KW_INT:
@@ -226,6 +274,12 @@ static DataType parse_type(void) {
   }
 }
 
+/**
+ * @brief function for func definition, it checks if definition has correct
+ * syntax, if yes, it pass arguments in ast_func_def
+ * @param is_main checks if func is main
+ * @return AstNode of func definition
+ **/
 static AstNode *parse_func_def(bool is_main) {
   size_t line = current_token.line;
   check_token(TOKEN_KW_DEF);
@@ -255,6 +309,11 @@ static AstNode *parse_func_def(bool is_main) {
                       is_main, line);
 }
 
+/**
+ * @brief function returns next token through parse_expression function,
+ * if return contains token from condition, it returns NULL
+ * @return AstNode to ast_return func
+ **/
 static AstNode *parse_return_state(void) {
   size_t line = current_token.line;
   check_token(TOKEN_KW_RETURN);
@@ -267,6 +326,11 @@ static AstNode *parse_return_state(void) {
   return ast_return(NULL, line);
 }
 
+/**
+ * @brief function check "if" keyword, condition after it, then keyword "then"
+ *and block of statements. If it has "else" block, function check the block too.
+ * @return AstNode to ast_if func
+ **/
 static AstNode *parse_if_state(void) {
   size_t line = current_token.line;
   check_token(TOKEN_KW_IF);
@@ -288,6 +352,11 @@ static AstNode *parse_if_state(void) {
   return ast_if(cond, then_block, else_block, line);
 }
 
+/**
+ * @brief function check "while" keyword, condition after it,
+ * "do" keyword and block
+ * @return AstNode to ast_while func
+ **/
 static AstNode *parse_while_do_state(void) {
   size_t line = current_token.line;
   check_token(TOKEN_KW_WHILE);
@@ -297,6 +366,11 @@ static AstNode *parse_while_do_state(void) {
   return ast_while(cond, block, line);
 }
 
+/**
+ * @brief function checks all parametres inside the parantheses of function
+ * and expect them to be seperated by comma
+ * @return AstNode to params_block function
+ **/
 static AstNode *parse_params(void) {
   AstNode *params_block = ast_block();
   if (current_token.type == TOKEN_RPAREN) {
@@ -318,7 +392,12 @@ static AstNode *parse_params(void) {
   }
   return params_block;
 }
-
+/**
+ * @brief function expect the kw main ,after that jumps into the parse_func_def
+ * func with true flag,
+ * so the func knows that it should behave to this block as main
+ * @return AstNode to parse_func_def func
+ **/
 static AstNode *parse_func_main(void) {
   check_token(TOKEN_ANNOT_MAIN);
   while (current_token.type == TOKEN_EOL) {
