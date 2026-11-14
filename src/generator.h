@@ -14,42 +14,50 @@
 #include <stdbool.h>
 
 /**
- * @brief Generates code that leaves the value of an expression on the stack
+ * @brief Generates code that leaves the value of an expression on the stack.
  *
- * Literals are pushed as constants (int@, float@, string@), variables as
- * LF@<text>$<var_id>
+ * Handles literals (int@, float@, string@, bool@), variables
+ * (LF@<name>$<var_id>), unary and binary operations, function calls and if
+ * expressions.
  *
- * @param node Expression node
+ * @param node Expression node.
  *
- * @return true on success, false on allocation error (compiler ends with 99)
+ * @return true on success, false on an invalid or unsupported node
+ *         (compiler ends with 99).
  */
 bool gen_expr(const AstNode *node);
 
 /**
- * @brief Generates code for one statement
+ * @brief Generates code for one statement; it leaves nothing on the stack.
  *
- * @param node Statement node
+ * Handles assignment, val/var declaration, while, if, block and return.
+ * An expression or call used as a statement is evaluated and its value is
+ * dropped into GF@$trash.
  *
- * @return true on success, false on allocation error (compiler ends with 99)
+ * @param node Statement node.
+ *
+ * @return true on success, false on an invalid or unsupported node
+ *         (compiler ends with 99).
  */
 bool gen_statement(const AstNode *node);
 
 /**
- * @brief Generates start of the program
+ * @brief Generates the start of the program.
  *
- * Prints the header, defines global variables, calls the main function and ends
- * the program
+ * Prints the header, defines the global helper variables, calls the main
+ * function and ends the program with EXIT.
  *
- * @param main_name Name of the function
+ * @param main_name Name of the function marked with @main.
  *
- * @return false if the name is too long or NULL
+ * @return true on success, false if the name is NULL or too long.
  */
 bool gen_program_start(const char *main_name);
 
 /**
- * @brief Generates end of the program
+ * @brief Generates the end of the program.
  *
- * Prints the definitions of the build-in functions implemented as IFJcode26
+ * Prints the definitions of the built-in functions implemented as IFJcode26
+ * subroutines (subStr, ord).
  */
 void gen_program_end(void);
 

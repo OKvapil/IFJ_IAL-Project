@@ -37,8 +37,8 @@ static const AstNode *program_root = NULL;
 
 /** @brief Names of the IFJ26 built-in functions, used by is_builtin. */
 static const char *const builtin_names[] = {
-    "print", "readLine",  "readInt", "readDouble", "toStr",
-    "toInt", "strLength", "subStr",  "ord", "chr", "readBoolean",
+    "print",     "readLine", "readInt", "readDouble", "toStr",       "toInt",
+    "strLength", "subStr",   "ord",     "chr",        "readBoolean",
 };
 
 /**
@@ -59,8 +59,9 @@ static bool needs_int2float(DataType type1, DataType type2) {
  * @brief Checks if a node is an expression (it leaves a value on the stack).
  *
  * Literals, identifiers, unary and binary operations and function calls are
- * expressions. Used to recognize an expression used as a statement and the
- * implicit return value of a function.
+ * expressions. An if is an expression only if semantic analysis gave it a
+ * result type other than Unit (CONTROL). Used to recognize an expression
+ * used as a statement and the implicit return value of a function.
  *
  * @param node Node to check (may be NULL).
  * @return true if the node is an expression, false otherwise or for NULL.
@@ -80,6 +81,8 @@ static bool is_expr_node(const AstNode *node) {
   case AST_FUNC_CALL:
   case AST_BOOL_LIT:
     return true;
+  case AST_IF:
+    return node->result_type != TYPE_UNKNOWN && node->result_type != TYPE_UNIT;
   default:
     return false;
   }
@@ -320,8 +323,20 @@ static bool flow_label(char *buff, size_t size, int id, const char *kind) {
   return true;
 }
 
+/**
+ * @brief Generates && and || with short-circuit evaluation (BOOLTHEN).
+ *
+ * The left operand is compared with the value that decides the result on
+ * its own (false for &&, true for ||). If it matches, the right operand is
+ * skipped and that value is the result; otherwise the result is the right
+ * operand. Exactly one value is left on the data stack.
+ *
+ * @param node AST_BINARY node with TOKEN_AND or TOKEN_OR.
+ * @return true on success, false on an invalid node or operator.
+ */
 static bool gen_logic(const AstNode *node) {
-  if (node == NULL || node->data.binary.left == NULL || node->data.binary.right == NULL) {
+  if (node == NULL || node->data.binary.left == NULL ||
+      node->data.binary.right == NULL) {
     return false;
   }
 
@@ -368,6 +383,7 @@ static bool gen_logic(const AstNode *node) {
  * when needed. Int division converts both operands to Double, divides and
  * converts back (rounds toward zero). String + uses CONCAT through
  * GF@$concat_l and GF@$concat_r. <=, >= and != are made with NOTS.
+ * && and || are handed over to gen_logic before the operands are generated.
  *
  * @param node AST_BINARY node.
  * @return true on success, false on an invalid node or operator.
@@ -455,7 +471,7 @@ static bool gen_binary(const AstNode *node) {
  * @brief Generates a unary operation using the data stack.
  *
  * Unary minus multiplies by -1 (Int) or -1.0 (Double), which keeps -0.0
- * for Double. Unary plus does nothing. Logical negation ! uses NOTS
+ * for Double. Unary plus does nothing. Logical negation ! uses NOTS.
  *
  * @param node AST_UNARY node.
  * @return true on success, false on an invalid node, operator or type.
@@ -587,8 +603,11 @@ static bool gen_var_decl(const AstNode *node) {
 /**
  * @brief Generates DEFVAR for every val/var found in a subtree.
  *
- * Walks blocks, if branches and while bodies recursively, so nested
- * declarations are defined once at the start of the function.
+ * Walks the whole subtree: blocks, if and while (conditions too), and also
+ * expressions (declaration initializers, assignments, returns, operands,
+ * call arguments), because an if expression can hide a block with a
+ * declaration inside an expression. Every declaration is defined once at
+ * the start of the function.
  *
  * @param node Subtree to search (NULL is allowed, e.g. a missing else).
  * @return true on success, false if a variable name cannot be built.
@@ -606,7 +625,7 @@ static bool gen_def_vars(const AstNode *node) {
       return false;
     }
     codegen_defvar(name);
-    return true;
+    return gen_def_vars(node->data.var_dec.init_expr);
   }
 
   case AST_BLOCK:
@@ -618,6 +637,9 @@ static bool gen_def_vars(const AstNode *node) {
     return true;
 
   case AST_IF:
+    if (!gen_def_vars(node->data.if_state.cond)) {
+      return false;
+    }
     if (!gen_def_vars(node->data.if_state.then_block)) {
       return false;
     }
@@ -627,8 +649,40 @@ static bool gen_def_vars(const AstNode *node) {
     return true;
 
   case AST_WHILE:
-    return gen_def_vars(node->data.while_state.block);
+    if (!gen_def_vars(node->data.while_state.cond)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.while_state.block)) {
+      return false;
+    }
+    return true;
 
+  case AST_UNARY:
+    return gen_def_vars(node->data.unary.operand);
+
+  case AST_BINARY:
+    if (!gen_def_vars(node->data.binary.left)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.binary.right)) {
+      return false;
+    }
+    return true;
+  case AST_FUNC_CALL:
+    if (node->data.func_call.args == NULL &&
+        node->data.func_call.arg_count > 0) {
+      return false;
+    }
+    for (size_t i = 0; i < node->data.func_call.arg_count; i++) {
+      if (!gen_def_vars(node->data.func_call.args[i])) {
+        return false;
+      }
+    }
+    return true;
+  case AST_ASSIGN:
+    return gen_def_vars(node->data.expr_assign.value);
+  case AST_RETURN:
+    return gen_def_vars(node->data.return_state.expression);
   default:
     return true;
   }
@@ -827,6 +881,102 @@ static bool gen_call(const AstNode *node) {
   return true;
 }
 
+/**
+ * @brief Generates the value of one branch of an if expression (CONTROL).
+ *
+ * A block branch generates all statements but the last one, and the last
+ * one, which must be an expression, gives the value. A one-line branch is
+ * the expression itself. The value is converted from Int to Double if the
+ * whole if expression is Double, and is left on the data stack.
+ *
+ * @param branch Then or else branch (AST_BLOCK or an expression).
+ * @param result_type Result type of the whole if expression.
+ * @return true on success, false on NULL, an empty block, a block that does
+ *         not end with an expression or an invalid expression.
+ */
+static bool gen_branch_value(const AstNode *branch, DataType result_type) {
+  if (branch == NULL) {
+    return false;
+  }
+
+  const AstNode *value = NULL;
+  if (branch->kind == AST_BLOCK) {
+    size_t count = branch->data.block.count;
+    AstNode **statements = branch->data.block.statements;
+
+    if (count == 0) {
+      return false;
+    }
+
+    for (size_t i = 0; i + 1 < count; i++) {
+      if (!gen_statement(statements[i])) {
+        return false;
+      }
+    }
+
+    value = statements[count - 1];
+    if (!is_expr_node(value)) {
+      return false;
+    }
+  } else {
+    value = branch;
+  }
+  if (!gen_expr(value)) {
+    return false;
+  }
+
+  if (result_type == TYPE_DOUBLE && value->result_type == TYPE_INT) {
+    codegen_int2floats();
+  }
+  return true;
+}
+
+/**
+ * @brief Generates an if used as an expression (CONTROL).
+ *
+ * Same jumps as gen_if, but each branch leaves its value on the data stack
+ * (gen_branch_value), so the whole if leaves exactly one value. The else
+ * branch is required.
+ *
+ * @param node AST_IF node with a result type other than Unit.
+ * @return true on success, false on an invalid node or a missing else.
+ */
+static bool gen_if_expr(const AstNode *node) {
+  if (node == NULL || node->data.if_state.else_block == NULL) {
+    return false;
+  }
+
+  char name_else[256];
+  char name_end[256];
+  int id = codegen_new_label_id();
+
+  if (!flow_label(name_else, sizeof(name_else), id, "ifx_else")) {
+    return false;
+  }
+  if (!flow_label(name_end, sizeof(name_end), id, "ifx_end")) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.if_state.cond)) {
+    return false;
+  }
+  codegen_pushs("bool@false");
+  codegen_jumpifeqs(name_else);
+
+  if (!gen_branch_value(node->data.if_state.then_block, node->result_type)) {
+    return false;
+  }
+  codegen_jump(name_end);
+  codegen_label(name_else);
+
+  if (!gen_branch_value(node->data.if_state.else_block, node->result_type)) {
+    return false;
+  }
+  codegen_label(name_end);
+
+  return true;
+}
+
 bool gen_expr(const AstNode *node) {
   if (node == NULL) {
     return false;
@@ -875,7 +1025,7 @@ bool gen_expr(const AstNode *node) {
   case AST_FUNC_CALL:
     return gen_call(node);
   case AST_BOOL_LIT: {
-   char *op = codegen_const_bool(node->data.bool_value);
+    char *op = codegen_const_bool(node->data.bool_value);
     if (op == NULL) {
       return false;
     }
@@ -883,6 +1033,8 @@ bool gen_expr(const AstNode *node) {
     free(op);
     return true;
   }
+  case AST_IF:
+    return gen_if_expr(node);
   default:
     return false;
   }
