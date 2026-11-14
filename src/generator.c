@@ -603,11 +603,12 @@ static bool gen_var_decl(const AstNode *node) {
 /**
  * @brief Generates DEFVAR for every val/var found in a subtree.
  *
- * Walks the whole subtree: blocks, if and while (conditions too), and also
- * expressions (declaration initializers, assignments, returns, operands,
- * call arguments), because an if expression can hide a block with a
- * declaration inside an expression. Every declaration is defined once at
- * the start of the function.
+ * Walks the whole subtree: blocks, if and while (conditions too), for loops
+ * (control variable, end and step, then the bounds, guards and body), and
+ * also expressions (declaration initializers, assignments, returns,
+ * operands, call arguments), because an if expression can hide a block
+ * with a declaration inside an expression. Every declaration is defined
+ * once at the start of the function.
  *
  * @param node Subtree to search (NULL is allowed, e.g. a missing else).
  * @return true on success, false if a variable name cannot be built.
@@ -683,6 +684,50 @@ static bool gen_def_vars(const AstNode *node) {
     return gen_def_vars(node->data.expr_assign.value);
   case AST_RETURN:
     return gen_def_vars(node->data.return_state.expression);
+  case AST_FOR: {
+    char name_var[256];
+    char name_end[256];
+    char name_step[256];
+    if (!var_name(name_var, sizeof(name_var), node->data.for_state.var_name,
+                  node->var_id)) {
+      return false;
+    }
+    if (!var_name(name_end, sizeof(name_end), "$for_end", node->var_id)) {
+      return false;
+    }
+    if (!var_name(name_step, sizeof(name_step), "$for_step", node->var_id)) {
+      return false;
+    }
+    codegen_defvar(name_var);
+    codegen_defvar(name_end);
+    codegen_defvar(name_step);
+
+    if (!gen_def_vars(node->data.for_state.from)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.for_state.to)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.for_state.step)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.for_state.body)) {
+      return false;
+    }
+
+    if (node->data.for_state.guards == NULL &&
+        node->data.for_state.guard_count > 0) {
+      return false;
+    }
+    for (size_t i = 0; i < node->data.for_state.guard_count; i++) {
+      if (!gen_def_vars(node->data.for_state.guards[i])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   default:
     return true;
   }
@@ -1041,6 +1086,142 @@ bool gen_expr(const AstNode *node) {
 }
 
 /**
+ * @brief Generates a for loop (CONTROL).
+ *
+ * The start, the end and the step are evaluated once before the loop and
+ * stored in the control variable, LF@$for_end$<id> and LF@$for_step$<id>.
+ * A step given by "by" is checked at runtime and a zero step ends the
+ * program with EXIT 40. With until the loop runs while i < end; with to
+ * the direction depends on the sign of the step (i <= end, or i >= end for
+ * a negative step). A false guard skips the body but the step is still
+ * added.
+ *
+ * @param node AST_FOR node.
+ * @return true on success, false on an invalid node, guard or body.
+ */
+static bool gen_for(const AstNode *node) {
+  if (node == NULL || node->data.for_state.from == NULL ||
+      node->data.for_state.to == NULL || node->data.for_state.body == NULL ||
+      (node->data.for_state.guards == NULL &&
+       node->data.for_state.guard_count > 0)) {
+    return false;
+  }
+
+  char name_var[256];
+  char name_end[256];
+  char name_step[256];
+  if (!var_name(name_var, sizeof(name_var), node->data.for_state.var_name,
+                node->var_id)) {
+    return false;
+  }
+  if (!var_name(name_end, sizeof(name_end), "$for_end", node->var_id)) {
+    return false;
+  }
+  if (!var_name(name_step, sizeof(name_step), "$for_step", node->var_id)) {
+    return false;
+  }
+
+  char label_loop[256];
+  char label_down[256];
+  char label_body[256];
+  char label_next[256];
+  char label_end[256];
+  int id = codegen_new_label_id();
+
+  if (!flow_label(label_loop, sizeof(label_loop), id, "for_loop")) {
+    return false;
+  }
+  if (!flow_label(label_down, sizeof(label_down), id, "for_down")) {
+    return false;
+  }
+  if (!flow_label(label_body, sizeof(label_body), id, "for_body")) {
+    return false;
+  }
+  if (!flow_label(label_next, sizeof(label_next), id, "for_next")) {
+    return false;
+  }
+  if (!flow_label(label_end, sizeof(label_end), id, "for_end")) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.for_state.from)) {
+    return false;
+  }
+  codegen_pops(name_var);
+
+  if (!gen_expr(node->data.for_state.to)) {
+    return false;
+  }
+  codegen_pops(name_end);
+
+  if (node->data.for_state.step != NULL) {
+    if (!gen_expr(node->data.for_state.step)) {
+      return false;
+    }
+  } else {
+    codegen_pushs("int@1");
+  }
+  codegen_pops(name_step);
+
+  if (node->data.for_state.step != NULL) {
+    codegen_jumpifneq(label_loop, name_step, "int@0");
+    codegen_exit("int@40");
+  }
+  codegen_label(label_loop);
+
+  if (node->data.for_state.until) {
+    codegen_pushs(name_var);
+    codegen_pushs(name_end);
+    codegen_lts();
+    codegen_pushs("bool@false");
+    codegen_jumpifeqs(label_end);
+  } else {
+    codegen_pushs(name_step);
+    codegen_pushs("int@0");
+    codegen_lts();
+    codegen_pushs("bool@true");
+    codegen_jumpifeqs(label_down);
+
+    codegen_pushs(name_var);
+    codegen_pushs(name_end);
+    codegen_gts();
+    codegen_pushs("bool@true");
+    codegen_jumpifeqs(label_end);
+    codegen_jump(label_body);
+
+    codegen_label(label_down);
+    codegen_pushs(name_var);
+    codegen_pushs(name_end);
+    codegen_lts();
+    codegen_pushs("bool@true");
+    codegen_jumpifeqs(label_end);
+  }
+  codegen_label(label_body);
+
+  for (size_t i = 0; i < node->data.for_state.guard_count; i++) {
+    if (!gen_expr(node->data.for_state.guards[i])) {
+      return false;
+    }
+    codegen_pushs("bool@false");
+    codegen_jumpifeqs(label_next);
+  }
+
+  if (!gen_statement(node->data.for_state.body)) {
+    return false;
+  }
+
+  codegen_label(label_next);
+  codegen_pushs(name_var);
+  codegen_pushs(name_step);
+  codegen_adds();
+  codegen_pops(name_var);
+  codegen_jump(label_loop);
+  codegen_label(label_end);
+
+  return true;
+}
+
+/**
  * @brief Generates a while loop.
  *
  * The condition is checked at the start of every iteration; the loop jumps
@@ -1154,6 +1335,8 @@ bool gen_statement(const AstNode *node) {
     return gen_var_decl(node);
   case AST_RETURN:
     return gen_return(node);
+  case AST_FOR:
+    return gen_for(node);
   default:
     if (is_expr_node(node)) {
       if (!gen_expr(node)) {

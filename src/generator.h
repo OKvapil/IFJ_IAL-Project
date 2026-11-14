@@ -30,9 +30,9 @@ bool gen_expr(const AstNode *node);
 /**
  * @brief Generates code for one statement; it leaves nothing on the stack.
  *
- * Handles assignment, val/var declaration, while, if, block and return.
- * An expression or call used as a statement is evaluated and its value is
- * dropped into GF@$trash.
+ * Handles assignment, val/var declaration, while, for, if, block and
+ * return. An expression or call used as a statement is evaluated and its
+ * value is dropped into GF@$trash.
  *
  * @param node Statement node.
  *
