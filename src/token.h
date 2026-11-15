@@ -35,7 +35,6 @@ typedef enum {
   TOKEN_KW_VAL,
   TOKEN_KW_VAR,
   TOKEN_KW_WHILE,
-
   // BOOLTHEN EXTENSION
   TOKEN_KW_TRUE,
   TOKEN_KW_FALSE,
@@ -76,7 +75,7 @@ typedef enum {
   /* --- Logical operators, boolthen extension --- */
   TOKEN_NOT, // '!'
   TOKEN_AND, // '&&'
-  TOKEN_OR,  // '||'
+  TOKEN_OR,  //'||'
 
   /* --- Delimiters and Punctuation --- */
   TOKEN_LPAREN,    // '(' (opening parenthesis)
@@ -94,7 +93,8 @@ typedef enum {
 typedef union {
   int64_t int_val;   // For TOKEN_INT_LIT (64-bit signed integer)
   double double_val; // For TOKEN_DOUBLE_LIT (64-bit IEEE 754 floating-point)
-  char *str_val;     // For TOKEN_IDENTIFIER and TOKEN_STRING_LIT (heap-allocated string)
+  char *str_val; // For TOKEN_IDENTIFIER and TOKEN_STRING_LIT (heap-allocated
+                 // string)
 } TokenAttribute;
 
 /**

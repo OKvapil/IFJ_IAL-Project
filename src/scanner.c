@@ -153,7 +153,7 @@ static const keyword_entry_t KEYWORDS[] = {
     {"Unit", TOKEN_KW_UNIT},       {"val", TOKEN_KW_VAL},
     {"var", TOKEN_KW_VAR},         {"while", TOKEN_KW_WHILE},
     {"true", TOKEN_KW_TRUE},       {"false", TOKEN_KW_FALSE},
-    {"boolean", TOKEN_KW_BOOLEAN}, {"to", TOKEN_KW_TO},
+    {"Boolean", TOKEN_KW_BOOLEAN}, {"to", TOKEN_KW_TO},
     {"until", TOKEN_KW_UNTIL},     {"by", TOKEN_KW_BY},
     {"for", TOKEN_KW_FOR},
 };
@@ -200,6 +200,9 @@ typedef enum scanner_state_e {
   STATE_MULTIPLY, // Final: '*'
 
   STATE_NOT, // Decision for '!' / '!='
+
+  STATE_AND, // Logical operand &&
+  STATE_OR,  // Logical operand ||
 
   /* --- Division and Comments --- */
   STATE_SLASH,           // Wait: '/'
@@ -374,6 +377,10 @@ int scanner_get_next_token(Token *token) {
         token->type = TOKEN_LTE;
         token->line = current_line;
         return 0;
+      } else if (c == '-') { // control extension
+        token->type = TOKEN_ARROW;
+        token->line = current_line;
+        return 0;
       } else {
         ungetc(c, source_file);
         token->type = TOKEN_LT;
@@ -396,6 +403,27 @@ int scanner_get_next_token(Token *token) {
     case STATE_NOT:
       if (c == '=') {
         token->type = TOKEN_NEQ;
+        token->line = current_line;
+        return 0;
+      } else {
+        ungetc(c, source_file); // Boolthen extension
+        token->type = TOKEN_NOT;
+        token->line = current_line;
+        return 0;
+      }
+
+    case STATE_AND:
+      if (c == '&') {
+        token->type = TOKEN_AND;
+        token->line = current_line;
+        return 0;
+      } else {
+        return ERR_LEXICAL;
+      }
+
+    case STATE_OR:
+      if (c == '|') {
+        token->type = TOKEN_OR;
         token->line = current_line;
         return 0;
       } else {
@@ -1172,9 +1200,18 @@ int scanner_get_next_token(Token *token) {
       } else if (c == '<') {
         at_line_start = false;
         state = STATE_LESS_THAN;
-      } else if (c == '!') {
+      }
+
+      /* --- Logical operators --- */
+      else if (c == '!') {
         at_line_start = false;
         state = STATE_NOT;
+      } else if (c == '&') {
+        at_line_start = false;
+        state = STATE_AND;
+      } else if (c == '|') {
+        at_line_start = false;
+        state = STATE_OR;
       }
 
       /* --- PUNCTUATION AND BRACKETS --- */
