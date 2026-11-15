@@ -145,13 +145,17 @@ typedef struct {
 } keyword_entry_t;
 
 static const keyword_entry_t KEYWORDS[] = {
-    {"def", TOKEN_KW_DEF},       {"do", TOKEN_KW_DO},
-    {"Double", TOKEN_KW_DOUBLE}, {"else", TOKEN_KW_ELSE},
-    {"if", TOKEN_KW_IF},         {"import", TOKEN_KW_IMPORT},
-    {"Int", TOKEN_KW_INT},       {"return", TOKEN_KW_RETURN},
-    {"String", TOKEN_KW_STRING}, {"then", TOKEN_KW_THEN},
-    {"Unit", TOKEN_KW_UNIT},     {"val", TOKEN_KW_VAL},
-    {"var", TOKEN_KW_VAR},       {"while", TOKEN_KW_WHILE},
+    {"def", TOKEN_KW_DEF},         {"do", TOKEN_KW_DO},
+    {"Double", TOKEN_KW_DOUBLE},   {"else", TOKEN_KW_ELSE},
+    {"if", TOKEN_KW_IF},           {"import", TOKEN_KW_IMPORT},
+    {"Int", TOKEN_KW_INT},         {"return", TOKEN_KW_RETURN},
+    {"String", TOKEN_KW_STRING},   {"then", TOKEN_KW_THEN},
+    {"Unit", TOKEN_KW_UNIT},       {"val", TOKEN_KW_VAL},
+    {"var", TOKEN_KW_VAR},         {"while", TOKEN_KW_WHILE},
+    {"true", TOKEN_KW_TRUE},       {"false", TOKEN_KW_FALSE},
+    {"boolean", TOKEN_KW_BOOLEAN}, {"to", TOKEN_KW_TO},
+    {"until", TOKEN_KW_UNTIL},     {"by", TOKEN_KW_BY},
+    {"for", TOKEN_KW_FOR},
 };
 
 // ---------- DFA states
