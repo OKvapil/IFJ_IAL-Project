@@ -36,6 +36,19 @@ typedef enum {
   TOKEN_KW_VAR,
   TOKEN_KW_WHILE,
 
+  // BOOLTHEN EXTENSION
+  TOKEN_KW_TRUE,
+  TOKEN_KW_FALSE,
+  TOKEN_KW_BOOLEAN,
+  // CONTROL EXTENSION
+  TOKEN_KW_TO,
+  TOKEN_KW_UNTIL,
+  TOKEN_KW_BY,
+  TOKEN_KW_FOR,
+
+  /* --- Control extension --- */
+  TOKEN_ARROW, // '<-'
+
   /* --- Identifiers and Literals --- */
   TOKEN_IDENTIFIER, // Variable or function name
   TOKEN_INT_LIT,    // Integer literal
@@ -60,6 +73,11 @@ typedef enum {
   TOKEN_GT,  // '>'  (greater than)
   TOKEN_GTE, // '>=' (greater than or equal)
 
+  /* --- Logical operators, boolthen extension --- */
+  TOKEN_NOT, // '!'
+  TOKEN_AND, // '&&'
+  TOKEN_OR,  // '||'
+
   /* --- Delimiters and Punctuation --- */
   TOKEN_LPAREN,    // '(' (opening parenthesis)
   TOKEN_RPAREN,    // ')' (closing parenthesis)
@@ -74,10 +92,9 @@ typedef enum {
  * @brief Semantic value held by a token depending on its type.
  */
 typedef union {
-  int64_t int_val;  // For TOKEN_INT_LIT (64-bit signed integer)
-  double double_val; // For TOKEN_FLOAT_LIT (64-bit IEEE 754 floating-point)
-  char *str_val;    // For TOKEN_IDENTIFIER and TOKEN_STRING_LIT (heap-allocated
-                    // string)
+  int64_t int_val;   // For TOKEN_INT_LIT (64-bit signed integer)
+  double double_val; // For TOKEN_DOUBLE_LIT (64-bit IEEE 754 floating-point)
+  char *str_val;     // For TOKEN_IDENTIFIER and TOKEN_STRING_LIT (heap-allocated string)
 } TokenAttribute;
 
 /**
