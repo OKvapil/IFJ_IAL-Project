@@ -230,6 +230,18 @@ typedef enum scanner_state_e {
 
 } scanner_state_t;
 
+static void scanner_static_cleanup(void) {
+  bracket_depth = 0;
+  comment_depth = 0;
+  space_count = 0;
+  pending_dedents = 0;
+  at_line_start = true;
+  has_tab = false;
+  com_newline = false;
+  line_had_token = false;
+  indent_locked = false;
+}
+
 void scanner_init(FILE *source) {
   if (source != NULL) {
     source_file = source;
@@ -237,15 +249,9 @@ void scanner_init(FILE *source) {
     source_file = stdin;
   }
   current_line = 1;
-  bracket_depth = 0;
-  comment_depth = 0;
-  at_line_start = true;
-  space_count = 0;
-  has_tab = false;
-  pending_dedents = 0;
-  com_newline = false;
-  line_had_token = false;
-  indent_locked = false;
+
+  scanner_static_cleanup();
+
   scanner_buffer_init(&s_buf);
   init_stack(&s_stack);
 }
@@ -253,15 +259,8 @@ void scanner_init(FILE *source) {
 void scanner_cleanup(void) {
   scanner_buffer_free(&s_buf);
   source_file = NULL;
-  space_count = 0;
-  has_tab = false;
-  bracket_depth = 0;
-  comment_depth = 0;
-  at_line_start = true;
-  pending_dedents = 0;
-  com_newline = false;
-  line_had_token = false;
-  indent_locked = false;
+
+  scanner_static_cleanup();
 }
 
 int scanner_get_next_token(Token *token) {
@@ -1107,8 +1106,25 @@ int scanner_get_next_token(Token *token) {
       }
 
       if (c == '/') {
-        state = STATE_SLASH;
-        break;
+        int next = fgetc(source_file);
+        if (next == '/') {
+          state = STATE_COM_LINE;
+          break;
+        } else if (next == '*') {
+          if (comment_depth == 0) {
+            line_had_token = !at_line_start;
+          }
+          comment_depth++;
+          state = STATE_COM_BLOCK;
+          break;
+        }
+        if (next != EOF) {
+          ungetc(next, source_file);
+        }
+      }
+
+      if (com_newline) {
+        return ERR_LEXICAL;
       }
 
       /*--- INDENTATION CONTROL ---*/
@@ -1200,6 +1216,9 @@ int scanner_get_next_token(Token *token) {
       } else if (c == '<') {
         at_line_start = false;
         state = STATE_LESS_THAN;
+      } else if (c == '/') {
+        at_line_start = false;
+        state = STATE_SLASH;
       }
 
       /* --- Logical operators --- */
