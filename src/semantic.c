@@ -184,11 +184,70 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   case AST_RETURN:
     break;
 
-  case AST_IF:
-    break;
+  case AST_IF: {
+    ErrorCode analyze_condition =
+        analyze_node(node->data.if_state.cond, symtable);
+    if (analyze_condition != ERR_OK) {
+      return analyze_condition;
+    }
 
-  case AST_WHILE:
+    if (node->data.if_state.cond->result_type != TYPE_BOOL) {
+      return ERR_TYPE;
+    }
+
+    ErrorCode analyze_then =
+        analyze_node(node->data.if_state.then_block, symtable);
+    if (analyze_then != ERR_OK) {
+      return analyze_then;
+    }
+
+    if (node->data.if_state.else_block != NULL) {
+      ErrorCode analyze_else =
+          analyze_node(node->data.if_state.else_block, symtable);
+      if (analyze_else != ERR_OK) {
+        return analyze_else;
+      }
+    }
+
+    DataType then_type = node->data.if_state.then_block->result_type;
+    DataType else_type;
+    if (node->data.if_state.else_block == NULL) {
+      else_type = TYPE_UNIT;
+    } else {
+      else_type = node->data.if_state.else_block->result_type;
+    }
+
+    if (then_type == else_type) {
+      node->result_type = then_type;
+    } else if (binary_result_type(then_type, else_type) == TYPE_DOUBLE) {
+      node->result_type = TYPE_DOUBLE;
+    } else {
+      node->result_type = TYPE_UNKNOWN;
+    }
+
     break;
+  }
+
+  case AST_WHILE: {
+    ErrorCode analyze_condition =
+        analyze_node(node->data.while_state.cond, symtable);
+    if (analyze_condition != ERR_OK) {
+      return analyze_condition;
+    }
+
+    if (node->data.while_state.cond->result_type != TYPE_BOOL) {
+      return ERR_TYPE;
+    }
+
+    ErrorCode analyze_body =
+        analyze_node(node->data.while_state.block, symtable);
+    if (analyze_body != ERR_OK) {
+      return analyze_body;
+    }
+
+    node->result_type = TYPE_UNIT;
+    break;
+  }
 
   case AST_BLOCK: {
     if (st_enter_scope(symtable) == -1) {
