@@ -29,11 +29,13 @@ static DataType binary_result_type(DataType op1_type, DataType op2_type) {
 
 static bool is_assignable(DataType decl_type, DataType init_type) {
   if ((decl_type == TYPE_DOUBLE && init_type == TYPE_INT) ||
-      (decl_type == init_type)) {
+      (decl_type == init_type) || (decl_type == TYPE_ANY)) {
     return true;
   }
   return false;
 }
+
+static Symbol *current_function;
 
 static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   switch (node->kind) {
@@ -178,11 +180,52 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   case AST_FUNC_DEF:
     break;
 
-  case AST_FUNC_CALL:
-    break;
+  case AST_FUNC_CALL: {
+    Symbol *symbol = st_lookup(symtable, node->data.func_call.name);
+    if (symbol == NULL || symbol->kind != SYMBOL_FUNCTION) {
+      return ERR_UNDEFINED;
+    }
 
-  case AST_RETURN:
+    if (node->data.func_call.arg_count != (size_t)symbol->param_count) {
+      return ERR_CALL_ARGS;
+    }
+
+    for (size_t i = 0; i < node->data.func_call.arg_count; i++) {
+      ErrorCode analyze_argument =
+          analyze_node(node->data.func_call.args[i], symtable);
+      if (analyze_argument != ERR_OK) {
+        return analyze_argument;
+      }
+      if (!(is_assignable(symbol->param_types[i],
+                          node->data.func_call.args[i]->result_type))) {
+        return ERR_CALL_ARGS;
+      }
+    }
+
+    node->result_type = symbol->type;
     break;
+  }
+
+  case AST_RETURN: {
+    DataType value_type = TYPE_UNIT;
+    if (node->data.return_state.expression != NULL) {
+      ErrorCode analyze_expression =
+          analyze_node(node->data.return_state.expression, symtable);
+      if (analyze_expression != ERR_OK) {
+        return analyze_expression;
+      }
+      value_type = node->data.return_state.expression->result_type;
+    }
+
+    if (current_function->type != TYPE_UNIT) {
+      if (!(is_assignable(current_function->type, value_type))) {
+        return ERR_TYPE;
+      }
+    }
+
+    node->result_type = TYPE_UNIT;
+    break;
+  }
 
   case AST_IF: {
     ErrorCode analyze_condition =
