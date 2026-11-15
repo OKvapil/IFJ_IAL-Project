@@ -27,6 +27,14 @@ static DataType binary_result_type(DataType op1_type, DataType op2_type) {
   }
 }
 
+static bool is_assignable(DataType decl_type, DataType init_type) {
+  if ((decl_type == TYPE_DOUBLE && init_type == TYPE_INT) ||
+      (decl_type == init_type)) {
+    return true;
+  }
+  return false;
+}
+
 static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   switch (node->kind) {
   case AST_INT_LIT:
@@ -182,44 +190,70 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   case AST_WHILE:
     break;
 
-  case AST_BLOCK:
-  {
+  case AST_BLOCK: {
     if (st_enter_scope(symtable) == -1) {
       return ERR_INTERNAL;
     }
 
     for (size_t i = 0; i < node->data.block.count; i++) {
-      ErrorCode node_result_error = analyze_node(node->data.block.statements[i], symtable);
+      ErrorCode node_result_error =
+          analyze_node(node->data.block.statements[i], symtable);
       if (node_result_error != ERR_OK) {
         return node_result_error;
       }
     }
     DataType block_type = TYPE_UNIT;
     if (node->data.block.count > 0) {
-      block_type = node->data.block.statements[node->data.block.count - 1]->result_type;
+      block_type =
+          node->data.block.statements[node->data.block.count - 1]->result_type;
     }
     node->result_type = block_type;
     st_exit_scope(symtable);
     break;
   }
 
-  case AST_ASSIGN:
+  case AST_ASSIGN: {
+    Symbol *symbol = st_lookup(symtable, node->data.expr_assign.name);
+    if (symbol == NULL) {
+      return ERR_UNDEFINED;
+    }
+
+    if (symbol->var_modifiable == false) {
+      return ERR_IMMUTABLE;
+    }
+
+    ErrorCode analyze_value =
+        analyze_node(node->data.expr_assign.value, symtable);
+    if (analyze_value != ERR_OK) {
+      return analyze_value;
+    }
+
+    if (!(is_assignable(symbol->type,
+                        node->data.expr_assign.value->result_type))) {
+      return ERR_TYPE;
+    }
+
+    node->var_id = symbol->var_unique_id;
+    node->result_type = TYPE_UNIT;
+
     break;
+  }
 
   case AST_VAR:
-  case AST_VAL:
-  {
+  case AST_VAL: {
     if (node->data.var_dec.init_expr == NULL) {
       return ERR_INTERNAL;
     }
 
-    ErrorCode init_result = analyze_node(node->data.var_dec.init_expr, symtable);
+    ErrorCode init_result =
+        analyze_node(node->data.var_dec.init_expr, symtable);
     if (init_result != ERR_OK) {
       return init_result;
     }
 
     if (node->data.var_dec.var_type != TYPE_UNKNOWN) {
-      if (node->data.var_dec.init_expr->result_type != node->data.var_dec.var_type) {
+      if (!(is_assignable(node->data.var_dec.var_type,
+                          node->data.var_dec.init_expr->result_type))) {
         return ERR_TYPE;
       }
     } else {
@@ -231,7 +265,9 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     }
 
     Symbol *symbol = NULL;
-    DeclarationCode decl_result = st_declare_var(symtable, node->data.var_dec.name, node->data.var_dec.var_type, node->kind == AST_VAR, &symbol);
+    DeclarationCode decl_result = st_declare_var(
+        symtable, node->data.var_dec.name, node->data.var_dec.var_type,
+        node->kind == AST_VAR, &symbol);
     if (decl_result == DECL_REDEF) {
       return ERR_REDEFINITION;
     } else if (decl_result == DECL_ALLOC_FAIL) {
@@ -239,12 +275,11 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     }
 
     node->var_id = symbol->var_unique_id;
-    
+
     node->result_type = TYPE_UNIT;
- 
+
     break;
   }
-    
   }
 
   return ERR_OK;
