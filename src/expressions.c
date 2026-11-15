@@ -32,6 +32,9 @@ typedef enum {
   DIV,
   REL,
   EQ,
+  AND,
+  OR,
+  NOT,
   UMINUS,
   LPAREN,
   RPAREN,
@@ -50,6 +53,12 @@ static OperatorsTable token_to_index(TokenType type) {
     return MUL;
   case TOKEN_DIV:
     return DIV;
+  case TOKEN_AND:
+    return AND;
+  case TOKEN_OR:
+    return OR;
+  case TOKEN_NOT:
+    return NOT;
   case TOKEN_LPAREN:
     return LPAREN;
   case TOKEN_RPAREN:
@@ -61,6 +70,10 @@ static OperatorsTable token_to_index(TokenType type) {
   case TOKEN_STRING_LIT:
     return ID;
   case TOKEN_IDENTIFIER:
+    return ID;
+  case TOKEN_KW_TRUE:
+    return ID;
+  case TOKEN_KW_FALSE:
     return ID;
   case TOKEN_LT:
     return REL;
@@ -93,18 +106,21 @@ typedef struct {
 } Stack;
 
 static const Operations precedence_table[TAB_MAX][TAB_MAX] = {
-    //       +  -  *  /  r  e  u  (  )  i  $
-    /* + */ {R, R, S, S, R, R, S, S, R, S, R},
-    /* - */ {R, R, S, S, R, R, S, S, R, S, R},
-    /* * */ {R, R, R, R, R, R, S, S, R, S, R},
-    /* / */ {R, R, R, R, R, R, S, S, R, S, R},
-    /* r */ {S, S, S, S, X, R, S, S, R, S, R},
-    /* e */ {S, S, S, S, S, X, S, S, R, S, R},
-    /* u */ {R, R, R, R, R, R, S, S, R, S, R},
-    /* ( */ {S, S, S, S, S, S, S, S, E, S, X},
-    /* ) */ {R, R, R, R, R, R, X, X, R, X, R},
-    /* i */ {R, R, R, R, R, R, X, X, R, X, R},
-    /* $ */ {S, S, S, S, S, S, S, S, X, S, X}};
+    //       +  -  *  /  r  e  &  |  !  u  (  )  i  $
+    /* + */ {R, R, S, S, R, R, R, R, S, S, S, R, S, R},
+    /* - */ {R, R, S, S, R, R, R, R, S, S, S, R, S, R},
+    /* * */ {R, R, R, R, R, R, R, R, S, S, S, R, S, R},
+    /* / */ {R, R, R, R, R, R, R, R, S, S, S, R, S, R},
+    /* r */ {S, S, S, S, X, R, R, R, S, S, S, R, S, R},
+    /* e */ {S, S, S, S, S, X, R, R, S, S, S, R, S, R},
+    /* & */ {S, S, S, S, S, S, R, R, S, S, S, R, S, R},
+    /* | */ {S, S, S, S, S, S, S, R, S, S, S, R, S, R},
+    /* ! */ {R, R, R, R, R, R, R, R, S, S, S, R, S, R},
+    /* u */ {R, R, R, R, R, R, R, R, S, S, S, R, S, R},
+    /* ( */ {S, S, S, S, S, S, S, S, S, S, S, E, S, X},
+    /* ) */ {R, R, R, R, R, R, R, R, X, X, X, R, X, R},
+    /* i */ {R, R, R, R, R, R, R, R, X, X, X, R, X, R},
+    /* $ */ {S, S, S, S, S, S, S, S, S, S, S, X, S, X}};
 
 // e = equality operators
 // r = relation operators
@@ -147,8 +163,8 @@ static int reduce(Stack *s) {
   // pravidlo E -> -E
   if (s->top->type == SYMBOL_NONTERMINAL && s->top->next != NULL &&
       s->top->next->type == SYMBOL_TERMINAL &&
-      s->top->next->operator== UMINUS && s->top->next->next != NULL &&
-      s->top->next->next->type == SYMBOL_STOP) {
+      (s->top->next->operator== UMINUS || s->top->next->operator== NOT) &&
+      s->top->next->next != NULL && s->top->next->next->type == SYMBOL_STOP) {
     AstNode *operand = s->top->ast_node;
     TokenType op_tok = s->top->next->token_type;
     size_t op_line = s->top->next->line;
@@ -159,6 +175,18 @@ static int reduce(Stack *s) {
     return push_stack(s, SYMBOL_NONTERMINAL, DOLLAR, TOKEN_EOF, 0, node);
   }
 
+  if (s->top->type == SYMBOL_TERMINAL &&
+      s->top->operator== RPAREN && s->top->next != NULL &&
+      s->top->next->type == SYMBOL_TERMINAL &&
+      s->top->next->operator== LPAREN && s->top->next->next != NULL &&
+      s->top->next->next->type == SYMBOL_STOP) {
+    AstNode *node = ast_new(AST_UNIT_LIT, s->top->next->line);
+    if (node == NULL) {
+      return ERR_INTERNAL;
+    }
+    pop_stack(s, 3);
+    return push_stack(s, SYMBOL_NONTERMINAL, DOLLAR, TOKEN_EOF, 0, node);
+  }
   StackNode *first = s->top;
   StackNode *second = (first != NULL) ? first->next : NULL;
   StackNode *third = (second != NULL) ? second->next : NULL;
@@ -180,7 +208,8 @@ static int reduce(Stack *s) {
   if (first->type == SYMBOL_NONTERMINAL && second->type == SYMBOL_TERMINAL &&
       (second->operator== PLUS || second->operator== MINUS ||
        second->operator== MUL || second->operator== DIV ||
-       second->operator== REL || second->operator== EQ) &&
+       second->operator== REL || second->operator== EQ ||
+       second->operator== AND || second->operator== OR) &&
       third->type == SYMBOL_NONTERMINAL) {
     AstNode *node = ast_binary(second->token_type, third->ast_node,
                                first->ast_node, second->line);
