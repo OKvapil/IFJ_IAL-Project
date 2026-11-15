@@ -75,7 +75,7 @@ typedef enum {
  */
 typedef union {
   int64_t int_val;  // For TOKEN_INT_LIT (64-bit signed integer)
-  double float_val; // For TOKEN_FLOAT_LIT (64-bit IEEE 754 floating-point)
+  double double_val; // For TOKEN_FLOAT_LIT (64-bit IEEE 754 floating-point)
   char *str_val;    // For TOKEN_IDENTIFIER and TOKEN_STRING_LIT (heap-allocated
                     // string)
 } TokenAttribute;

@@ -12,6 +12,7 @@
 #include "errors.h"
 #include <ctype.h>
 #include <errno.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +27,9 @@ static int bracket_depth = 0;
 static int comment_depth = 0;
 static bool at_line_start = true;
 static bool has_tab = false;
+static bool com_newline = false;
+static bool line_had_token = false;
+static bool indent_locked = false;
 
 /* ============================================================================
  * Authorship Note:
@@ -227,10 +231,14 @@ void scanner_init(FILE *source) {
   }
   current_line = 1;
   bracket_depth = 0;
+  comment_depth = 0;
   at_line_start = true;
   space_count = 0;
   has_tab = false;
   pending_dedents = 0;
+  com_newline = false;
+  line_had_token = false;
+  indent_locked = false;
   scanner_buffer_init(&s_buf);
   init_stack(&s_stack);
 }
@@ -240,6 +248,13 @@ void scanner_cleanup(void) {
   source_file = NULL;
   space_count = 0;
   has_tab = false;
+  bracket_depth = 0;
+  comment_depth = 0;
+  at_line_start = true;
+  pending_dedents = 0;
+  com_newline = false;
+  line_had_token = false;
+  indent_locked = false;
 }
 
 int scanner_get_next_token(Token *token) {
@@ -429,10 +444,19 @@ int scanner_get_next_token(Token *token) {
         state = STATE_COM_LINE;
         break;
       } else if (c == '*') {
+        if (comment_depth == 0) {
+          line_had_token = !at_line_start;
+        }
         comment_depth++;
         state = STATE_COM_BLOCK;
         break;
       } else {
+        if (com_newline) {
+          return ERR_LEXICAL;
+        }
+        if (at_line_start && has_tab) {
+          return ERR_LEXICAL;
+        }
         at_line_start = false;
         ungetc(c, source_file);
         token->type = TOKEN_DIV;
@@ -442,10 +466,18 @@ int scanner_get_next_token(Token *token) {
 
     case STATE_COM_LINE:
       if (c == EOF) {
-        state = STATE_EOF;
-        break;
+        if (at_line_start || bracket_depth > 0) {
+          state = STATE_EOF;
+          break;
+        }
+        at_line_start = true;
+        token->type = TOKEN_EOL;
+        token->line = current_line;
+        return 0;
       } else if (c == '\n') {
         current_line++;
+        com_newline = false;
+        indent_locked = false;
 
         // empty line
         if (at_line_start == true) {
@@ -485,6 +517,13 @@ int scanner_get_next_token(Token *token) {
         break;
       } else if (c == '\n') {
         current_line++;
+        if (bracket_depth <= 0) {
+          com_newline = true;
+          at_line_start = true;
+          space_count = 0;
+          has_tab = false;
+          indent_locked = false;
+        }
         break;
       }
       break;
@@ -499,6 +538,13 @@ int scanner_get_next_token(Token *token) {
         break;
       } else if (c == '\n') {
         current_line++;
+        if (bracket_depth <= 0) {
+          com_newline = true;
+          at_line_start = true;
+          space_count = 0;
+          has_tab = false;
+          indent_locked = false;
+        }
         state = STATE_COM_BLOCK;
         break;
       } else if (c == EOF) {
@@ -512,7 +558,20 @@ int scanner_get_next_token(Token *token) {
       if (c == '/') {
         comment_depth--; // Closed current comment level (*/)
         if (comment_depth == 0) {
-          state = STATE_START; // All nested levels closed
+          if (com_newline) {
+            if (line_had_token && bracket_depth <= 0) {
+              line_had_token = false;
+              at_line_start = true;
+              token->type = TOKEN_EOL;
+              token->line = current_line;
+              return 0;
+            }
+          } else {
+            if (at_line_start) {
+              indent_locked = true;
+            }
+          }
+          state = STATE_START;
           break;
         } else {
           state = STATE_COM_BLOCK;
@@ -524,6 +583,13 @@ int scanner_get_next_token(Token *token) {
         return ERR_LEXICAL;
       } else if (c == '\n') {
         current_line++;
+        if (bracket_depth <= 0) {
+          com_newline = true;
+          at_line_start = true;
+          space_count = 0;
+          has_tab = false;
+          indent_locked = false;
+        }
         state = STATE_COM_BLOCK;
         break;
       } else {
@@ -675,9 +741,13 @@ int scanner_get_next_token(Token *token) {
       } else {
         // Return double token
         ungetc(c, source_file);
+        double val = strtod(s_buf.data, NULL);
+        if (isinf(val)) {
+          return ERR_LEXICAL;
+        }
         token->type = TOKEN_DOUBLE_LIT;
         token->line = current_line;
-        token->attr.float_val = strtod(s_buf.data, NULL);
+        token->attr.double_val = val;
         return 0;
       }
 
@@ -735,9 +805,13 @@ int scanner_get_next_token(Token *token) {
         return ERR_LEXICAL;
       } else {
         ungetc(c, source_file);
+        double val = strtod(s_buf.data, NULL);
+        if (isinf(val)) {
+          return ERR_LEXICAL;
+        }
         token->type = TOKEN_DOUBLE_LIT;
         token->line = current_line;
-        token->attr.float_val = strtod(s_buf.data, NULL);
+        token->attr.double_val = val;
         return 0;
       }
 
@@ -758,9 +832,13 @@ int scanner_get_next_token(Token *token) {
         return ERR_LEXICAL;
       }
       ungetc(c, source_file);
+      double val = strtod(s_buf.data, NULL);
+      if (isinf(val)) {
+        return ERR_LEXICAL;
+      }
       token->type = TOKEN_DOUBLE_LIT;
       token->line = current_line;
-      token->attr.float_val = strtod(s_buf.data, NULL);
+      token->attr.double_val = val;
       return 0;
 
     /* --- STRINGS --- */
@@ -937,6 +1015,8 @@ int scanner_get_next_token(Token *token) {
         /* --- LF --- */
         if (c == '\n') {
           current_line++;
+          com_newline = false;
+          indent_locked = false;
 
           /* --- EMPTY LINE --- */
           if (at_line_start) {
@@ -961,10 +1041,14 @@ int scanner_get_next_token(Token *token) {
         /* --- SPACE or TAB --- */
         if (at_line_start) {
           if (c == ' ') {
-            space_count++;
+            if (!indent_locked) {
+              space_count++;
+            }
             break;
           } else if (c == '\t') {
-            has_tab = true;
+            if (!indent_locked) {
+              has_tab = true;
+            }
             break;
           } else {
             break;
@@ -981,9 +1065,18 @@ int scanner_get_next_token(Token *token) {
           break;
         }
         at_line_start = true;
-        token->type=TOKEN_EOL;
-        token->line=current_line;
+        token->type = TOKEN_EOL;
+        token->line = current_line;
         return 0;
+      }
+
+      if (com_newline && c != '/') {
+        return ERR_LEXICAL;
+      }
+
+      if (c == '/') {
+        state = STATE_SLASH;
+        break;
       }
 
       /*--- INDENTATION CONTROL ---*/
@@ -1078,8 +1171,6 @@ int scanner_get_next_token(Token *token) {
       } else if (c == '!') {
         at_line_start = false;
         state = STATE_NOT;
-      } else if (c == '/') {
-        state = STATE_SLASH;
       }
 
       /* --- PUNCTUATION AND BRACKETS --- */
