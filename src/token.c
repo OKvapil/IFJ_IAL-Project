@@ -1,3 +1,12 @@
+/**
+ * @file token.c
+ * @brief Token utility functions implementation for the IFJ26 compiler
+ *
+ * IFJ/IAL project - IFJ26 compiler
+ *
+ * @author Filip Haza (xhazafi00)
+ */
+
 #include "token.h"
 #include <stdlib.h>
 
