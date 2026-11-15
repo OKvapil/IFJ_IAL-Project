@@ -160,7 +160,7 @@ static int reduce(Stack *s) {
     return push_stack(s, SYMBOL_NONTERMINAL, DOLLAR, TOKEN_EOF, 0, node);
   }
 
-  // pravidlo E -> -E
+  // pravidlo E -> -E / +E / !E
   if (s->top->type == SYMBOL_NONTERMINAL && s->top->next != NULL &&
       s->top->next->type == SYMBOL_TERMINAL &&
       (s->top->next->operator== UMINUS || s->top->next->operator== NOT) &&
