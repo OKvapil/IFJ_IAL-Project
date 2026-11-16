@@ -44,8 +44,9 @@ typedef struct AstNode {
 
   union {
     int64_t int_value;
-    double double_value;
+    double float_value;
     char *text;
+    bool bool_value;
 
     struct {
       TokenType op;
@@ -226,6 +227,33 @@ AstNode *ast_var_decl(AstKind kind, char *name, DataType type,
 AstNode *ast_func_def(char *name, DataType return_type, AstNode **params,
                       size_t param_count, AstNode *block, bool is_main,
                       size_t line);
+/**
+ * @brief Creates a new AST node for a range-based for loop (CONTROL extension).
+ *
+ * @param line Source line number.
+ * @param name Loop control variable name (takes ownership of the string).
+ * @param from Start expression of the range.
+ * @param to End expression of the range.
+ * @param step Step expression after "by" (or NULL if omitted).
+ * @param until True for "until" (exclusive upper bound), false for "to"
+ * (inclusive).
+ * @param guards Array of guard condition expressions ("if ...").
+ * @param guard_count Number of guard conditions.
+ * @param body Loop body (block or single statement/expression).
+ * @return Pointer to the newly allocated AstNode.
+ */
+AstNode *ast_for(size_t line, char *name, AstNode *from, AstNode *to,
+                 AstNode *step, bool until, AstNode **guards,
+                 size_t guard_count, AstNode *body);
+
+
+/**
+ * @brief Creates a new node that has result_type UNIT insted of UNKNOWN
+ *
+ * @param line line number
+ * @return Pointer to the newly allocated AstNode.
+ */
+AstNode *ast_unit(size_t line);
 
 /**
  * @brief Creates a new AST node for a function call.

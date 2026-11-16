@@ -81,7 +81,7 @@ AstNode *ast_from_token(Token *value) {
     break;
   case TOKEN_DOUBLE_LIT:
     node->kind = AST_DOUBLE_LIT;
-    node->data.double_value = value->attr.double_val;
+    node->data.float_value = value->attr.double_val;
     node->result_type = TYPE_DOUBLE;
     break;
   case TOKEN_STRING_LIT:
@@ -98,12 +98,14 @@ AstNode *ast_from_token(Token *value) {
     break;
   case TOKEN_KW_TRUE:
     node->kind = AST_BOOL_LIT;
-    node->data.bool_value = value->type == TOKEN_KW_TRUE;
+    node->data.bool_value = TOKEN_KW_TRUE;
     node->result_type = TYPE_BOOL;
+    break;
   case TOKEN_KW_FALSE:
     node->kind = AST_BOOL_LIT;
-    node->data.bool_value = value->type == TOKEN_KW_FALSE;
+    node->data.bool_value = TOKEN_KW_FALSE;
     node->result_type = TYPE_BOOL;
+    break;
   default:
     free(node);
     return NULL;
@@ -146,6 +148,27 @@ AstNode *ast_var_decl(AstKind kind, char *name, DataType type,
   node->data.var_dec.name = name;
   node->data.var_dec.init_expr = init_expr;
   node->data.var_dec.var_type = type;
+  return node;
+}
+
+AstNode *ast_for(size_t line, char *name, AstNode *from, AstNode *to,
+                 AstNode *step, bool until, AstNode **guards,
+                 size_t guard_count, AstNode *body) {
+  AstNode *node = ast_new(AST_FOR, line);
+  node->data.for_state.var_name = name;
+  node->data.for_state.body = body;
+  node->data.for_state.from = from;
+  node->data.for_state.guard_count = guard_count;
+  node->data.for_state.guards = guards;
+  node->data.for_state.step = step;
+  node->data.for_state.to = to;
+  node->data.for_state.until = until;
+  return node;
+}
+
+AstNode *ast_unit(size_t line) {
+  AstNode *node = ast_new(AST_UNIT_LIT, line);
+  node->result_type = TYPE_UNIT;
   return node;
 }
 
@@ -225,7 +248,7 @@ AstNode *ast_free(AstNode *node) {
     ast_free(node->data.for_state.to);
     ast_free(node->data.for_state.step);
     ast_free(node->data.for_state.body);
-    for (int i = 0; i < node->data.for_state.guard_count; i++) {
+    for (size_t i = 0; i < node->data.for_state.guard_count; i++) {
       ast_free(node->data.for_state.guards[i]);
     }
     free(node->data.for_state.guards);
@@ -259,5 +282,3 @@ AstNode *ast_return(AstNode *expr, size_t line) {
   node->data.return_state.expression = expr;
   return node;
 }
-
-// TODO: pridat ast_for
