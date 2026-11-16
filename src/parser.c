@@ -41,9 +41,13 @@ static AstNode *parse_if_state(void);
 
 static AstNode *parse_while_do_state(void);
 
+static AstNode *parse_for_state(void);
+
 static AstNode *parse_params(void);
 
 static AstNode *parse_func_main(void);
+
+static AstNode *parse_value_or_if(void);
 
 /**
  * @brief Function expects token, if current_token is correct (expected), we
@@ -168,6 +172,17 @@ static void parse_import(void) {
 }
 
 /**
+ * @brief Parses either an if-expression or a standard expression.
+ * @return Pointer to the parsed AstNode.
+ **/
+static AstNode *parse_value_or_if(void) {
+  if (current_token.type == TOKEN_KW_IF) {
+    return parse_if_state();
+  }
+  return parse_expression(&current_token);
+}
+
+/**
  * @brief Function checks different types of keyword tokens, for every type
  * decide how this keyword behaves and returns function for its next processing
  * @return valid AstNode statement
@@ -186,20 +201,22 @@ static AstNode *parse_statement(void) {
       type = parse_type();
     }
     check_token(TOKEN_ASSIGN);
-    AstNode *init_expr = parse_expression(&current_token);
+    AstNode *init_expr = parse_value_or_if();
     return ast_var_decl(kind, name, type, init_expr, line);
   }
   case TOKEN_KW_IF:
     return parse_if_state();
   case TOKEN_KW_WHILE:
     return parse_while_do_state();
+  case TOKEN_KW_FOR:
+    return parse_for_state();
   case TOKEN_KW_RETURN:
     return parse_return_state();
   case TOKEN_IDENTIFIER: {
     char *name = consume_identifier();
     if (current_token.type == TOKEN_ASSIGN) {
       check_token(TOKEN_ASSIGN);
-      AstNode *value = parse_expression(&current_token);
+      AstNode *value = parse_value_or_if();
       return ast_expr_assign(name, value, line);
     }
     AstNode *first;
@@ -212,7 +229,7 @@ static AstNode *parse_statement(void) {
       id.attr.str_val = name;
       first = ast_from_token(&id);
     }
-    return parse_expression(&current_token, first);
+    return parse_expression_from(&current_token, first);
   }
   default:
     fprintf(stderr, "Syntax error: expected statement at line %zu\n",
@@ -298,7 +315,7 @@ static AstNode *parse_func_def(bool is_main) {
   if (current_token.type == TOKEN_EOL) {
     block = parse_block();
   } else {
-    block = parse_expression(&current_token);
+    block = parse_value_or_if();
   }
 
   AstNode **param_list = params->data.block.statements;
@@ -320,7 +337,7 @@ static AstNode *parse_return_state(void) {
   if (current_token.type != TOKEN_EOL && current_token.type != TOKEN_DEDENT &&
       current_token.type != TOKEN_EOF &&
       current_token.type != TOKEN_SEMICOLON) {
-    AstNode *expr = parse_expression(&current_token);
+    AstNode *expr = parse_value_or_if();
     return ast_return(expr, line);
   }
   return ast_return(NULL, line);
@@ -336,17 +353,22 @@ static AstNode *parse_if_state(void) {
   check_token(TOKEN_KW_IF);
   AstNode *cond = parse_expression(&current_token);
   check_token(TOKEN_KW_THEN);
-  AstNode *then_block = parse_block();
+  AstNode *then_block = NULL;
+  if (current_token.type == TOKEN_EOL) {
+    then_block = parse_block();
+  } else {
+    then_block = parse_value_or_if();
+  }
   while (current_token.type == TOKEN_EOL) {
     check_token(TOKEN_EOL);
   }
   AstNode *else_block = NULL;
   if (current_token.type == TOKEN_KW_ELSE) {
     check_token(TOKEN_KW_ELSE);
-    if (current_token.type == TOKEN_KW_IF) {
-      else_block = parse_if_state();
-    } else {
+    if (current_token.type == TOKEN_EOL) {
       else_block = parse_block();
+    } else {
+      else_block = parse_value_or_if();
     }
   }
   return ast_if(cond, then_block, else_block, line);
@@ -364,6 +386,79 @@ static AstNode *parse_while_do_state(void) {
   check_token(TOKEN_KW_DO);
   AstNode *block = parse_block();
   return ast_while(cond, block, line);
+}
+
+static AstNode *parse_for_state(void) {
+  size_t line = current_token.line;
+  check_token(TOKEN_KW_FOR);
+
+  bool multiline = false;
+  if (current_token.type == TOKEN_EOL) {
+    multiline = true;
+    while (current_token.type == TOKEN_EOL) {
+      check_token(TOKEN_EOL);
+    }
+    check_token(TOKEN_INDENT);
+  }
+
+  char *var_name = consume_identifier();
+  check_token(TOKEN_ARROW);
+  AstNode *from = parse_expression(&current_token);
+  bool until = false;
+  if (current_token.type == TOKEN_KW_TO) {
+    check_token(TOKEN_KW_TO);
+  } else if (current_token.type == TOKEN_KW_UNTIL) {
+    check_token(TOKEN_KW_UNTIL);
+    until = true;
+  } else {
+    fprintf(stderr, "Syntax error: expected 'to' or 'until' at line %zu\n",
+            current_token.line);
+    exit(ERR_SYNTAX);
+  }
+  AstNode *to = parse_expression(&current_token);
+
+  AstNode *step = NULL;
+  if (current_token.type == TOKEN_KW_BY) {
+    check_token(TOKEN_KW_BY);
+    step = parse_expression(&current_token);
+  }
+  if (multiline) {
+    while (current_token.type == TOKEN_EOL) {
+      check_token(TOKEN_EOL);
+    }
+  }
+  AstNode *guards_block = ast_block();
+  while (current_token.type == TOKEN_KW_IF) {
+    check_token(TOKEN_KW_IF);
+    AstNode *guard = parse_expression(&current_token);
+    ast_block_add_stmt(guards_block, guard);
+    if (multiline) {
+      while (current_token.type == TOKEN_EOL) {
+        check_token(TOKEN_EOL);
+      }
+    }
+  }
+  if (multiline) {
+    check_token(TOKEN_DEDENT);
+    while (current_token.type == TOKEN_EOL) {
+      check_token(TOKEN_EOL);
+    }
+  }
+  check_token(TOKEN_KW_DO);
+
+  AstNode *body = NULL;
+  if (current_token.type == TOKEN_EOL) {
+    body = parse_block();
+  } else {
+    body = parse_statement();
+  }
+
+  AstNode **guards = guards_block->data.block.statements;
+  size_t guard_count = guards_block->data.block.count;
+  free(guards_block);
+
+  return ast_for(line, var_name, from, to, step, until, guards, guard_count,
+                 body);
 }
 
 /**
