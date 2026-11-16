@@ -16,92 +16,106 @@
 #include <stdint.h>
 
 typedef enum {
-    AST_INT_LIT,
-    AST_DOUBLE_LIT,
-    AST_STRING_LIT,
-    AST_IDENTIFIER,
-    AST_UNARY,
-    AST_BINARY,
-    AST_FUNC_DEF,
-    AST_FUNC_CALL,
-    AST_RETURN,
-    AST_IF,
-    AST_WHILE,
-    AST_BLOCK,
-    AST_ASSIGN,
-    AST_VAL,
-    AST_VAR
+  AST_INT_LIT,
+  AST_DOUBLE_LIT,
+  AST_STRING_LIT,
+  AST_IDENTIFIER,
+  AST_UNARY,
+  AST_BINARY,
+  AST_FUNC_DEF,
+  AST_FUNC_CALL,
+  AST_RETURN,
+  AST_IF,
+  AST_WHILE,
+  AST_BLOCK,
+  AST_ASSIGN,
+  AST_VAL,
+  AST_VAR,
+  AST_BOOL_LIT,
+  AST_FOR,
+  AST_UNIT_LIT
 } AstKind;
 
 typedef struct AstNode {
-    AstKind kind;
-    size_t line;
-    DataType result_type;
-    int var_id;
+  AstKind kind;
+  size_t line;
+  DataType result_type;
+  int var_id;
 
-    union {
-        int64_t int_value;
-        double float_value;
-        char *text;
+  union {
+    int64_t int_value;
+    double double_value;
+    char *text;
 
-        struct {
-            TokenType op;
-            struct AstNode *operand;
-        } unary;
+    struct {
+      TokenType op;
+      struct AstNode *operand;
+    } unary;
 
-        struct {
-            TokenType op;
-            struct AstNode *left;
-            struct AstNode *right;
-        } binary;
+    struct {
+      TokenType op;
+      struct AstNode *left;
+      struct AstNode *right;
+    } binary;
 
-        struct {
-            struct AstNode *cond;
-            struct AstNode *then_block;
-            struct AstNode *else_block;
-        } if_state;
+    struct {
+      struct AstNode *cond;
+      struct AstNode *then_block;
+      struct AstNode *else_block;
+    } if_state;
 
-        struct {
-            struct AstNode *cond;
-            struct AstNode *block;
-        } while_state;
+    struct {
+      struct AstNode *cond;
+      struct AstNode *block;
+    } while_state;
 
-        struct {
-            char *name;
-            struct AstNode *value;
-        } expr_assign;
+    struct {
+      char *name;
+      struct AstNode *value;
+    } expr_assign;
 
-        struct {
-            char *name;
-            struct AstNode **args;
-            size_t arg_count;
-        } func_call;
+    struct {
+      char *name;
+      struct AstNode **args;
+      size_t arg_count;
+    } func_call;
 
-        struct {
-            struct AstNode **statements;
-            size_t count;
-            size_t capacity;
-        } block;
+    struct {
+      struct AstNode **statements;
+      size_t count;
+      size_t capacity;
+    } block;
 
-        struct {
-            char *name;
-            struct AstNode **params;
-            size_t param_count;
-            DataType return_type;
-            struct AstNode *block;
-            bool is_main;
-        } func_def;
+    struct {
+      char *name;
+      struct AstNode **params;
+      size_t param_count;
+      DataType return_type;
+      struct AstNode *block;
+      bool is_main;
+    } func_def;
 
-        struct {
-            DataType var_type;
-            char *name;
-            struct AstNode *init_expr;
-        } var_dec;
+    struct {
+      DataType var_type;
+      char *name;
+      struct AstNode *init_expr;
+    } var_dec;
 
-        struct {
-            struct AstNode *expression;
-        } return_state;
-    } data;
+    struct {
+      struct AstNode *expression;
+    } return_state;
+
+    struct {
+      char *var_name;
+      struct AstNode *from;
+      struct AstNode *to;
+      struct AstNode *step;
+      bool until;
+      struct AstNode **guards;
+      size_t guard_count;
+      struct AstNode *body;
+    } for_state;
+  } data;
 } AstNode;
 
 /**
@@ -160,8 +174,10 @@ AstNode *ast_unary(TokenType op, AstNode *operand, size_t line);
 /**
  * @brief Creates a leaf AST node (literal or identifier) from a scanner token.
  *
- * @param value Pointer to the source token (transfers ownership of str_val if present).
- * @return Pointer to the newly allocated AstNode, or NULL on unsupported token type.
+ * @param value Pointer to the source token (transfers ownership of str_val if
+ * present).
+ * @return Pointer to the newly allocated AstNode, or NULL on unsupported token
+ * type.
  */
 AstNode *ast_from_token(Token *value);
 
@@ -182,7 +198,8 @@ AstNode *ast_block(void);
 AstNode *ast_block_add_stmt(AstNode *block, AstNode *statement);
 
 /**
- * @brief Creates a new AST node for a variable or constant declaration (val / var).
+ * @brief Creates a new AST node for a variable or constant declaration (val /
+ * var).
  *
  * @param kind Declaration kind (AST_VAL or AST_VAR).
  * @param name Identifier name (takes ownership of the string).

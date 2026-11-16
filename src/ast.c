@@ -81,7 +81,7 @@ AstNode *ast_from_token(Token *value) {
     break;
   case TOKEN_DOUBLE_LIT:
     node->kind = AST_DOUBLE_LIT;
-    node->data.float_value = value->attr.float_val;
+    node->data.double_value = value->attr.double_val;
     node->result_type = TYPE_DOUBLE;
     break;
   case TOKEN_STRING_LIT:
@@ -96,6 +96,14 @@ AstNode *ast_from_token(Token *value) {
     value->attr.str_val = NULL;
     node->result_type = TYPE_UNKNOWN;
     break;
+  case TOKEN_KW_TRUE:
+    node->kind = AST_BOOL_LIT;
+    node->data.bool_value = value->type == TOKEN_KW_TRUE;
+    node->result_type = TYPE_BOOL;
+  case TOKEN_KW_FALSE:
+    node->kind = AST_BOOL_LIT;
+    node->data.bool_value = value->type == TOKEN_KW_FALSE;
+    node->result_type = TYPE_BOOL;
   default:
     free(node);
     return NULL;
@@ -211,6 +219,17 @@ AstNode *ast_free(AstNode *node) {
     }
     free(node->data.func_def.params);
     break;
+  case AST_FOR:
+    free(node->data.for_state.var_name);
+    ast_free(node->data.for_state.from);
+    ast_free(node->data.for_state.to);
+    ast_free(node->data.for_state.step);
+    ast_free(node->data.for_state.body);
+    for (int i = 0; i < node->data.for_state.guard_count; i++) {
+      ast_free(node->data.for_state.guards[i]);
+    }
+    free(node->data.for_state.guards);
+    break;
   case AST_STRING_LIT:
     free(node->data.text);
     break;
@@ -240,3 +259,5 @@ AstNode *ast_return(AstNode *expr, size_t line) {
   node->data.return_state.expression = expr;
   return node;
 }
+
+// TODO: pridat ast_for
