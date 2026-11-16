@@ -53,7 +53,7 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
 
   case AST_IDENTIFIER: {
     Symbol *symbol = st_lookup(symtable, node->data.text);
-    if (symbol == NULL) {
+    if (symbol == NULL || symbol->kind != SYMBOL_VARIABLE) {
       return ERR_UNDEFINED;
     }
     node->result_type = symbol->type;
@@ -177,8 +177,71 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     break;
   }
 
-  case AST_FUNC_DEF:
+  case AST_FUNC_DEF: {
+    Symbol *symbol = st_lookup(symtable, node->data.func_def.name);
+    if (symbol == NULL) {
+      return ERR_INTERNAL;
+    }
+
+    if (st_enter_scope(symtable) == -1) {
+      return ERR_INTERNAL;
+    }
+
+    for (size_t i = 0; i < node->data.func_def.param_count; i++) {
+      Symbol *param_symbol = NULL;
+      AstNode *param = node->data.func_def.params[i];
+      DeclarationCode declared_param =
+          st_declare_var(symtable, param->data.var_dec.name,
+                         param->data.var_dec.var_type, false, &param_symbol);
+      if (declared_param == DECL_REDEF) {
+        return ERR_REDEFINITION;
+      } else if (declared_param == DECL_ALLOC_FAIL) {
+        return ERR_INTERNAL;
+      }
+      param->var_id = param_symbol->var_unique_id;
+    }
+
+    Symbol *saved = current_function;
+    current_function = symbol;
+
+    if (node->data.func_def.block != NULL) {
+      ErrorCode analyze_block =
+          analyze_node(node->data.func_def.block, symtable);
+      if (analyze_block != ERR_OK) {
+        return analyze_block;
+      }
+    }
+
+    current_function = saved;
+    st_exit_scope(symtable);
+
+    bool ends_with_return = false;
+    AstNode *body = node->data.func_def.block;
+    if (body->kind == AST_BLOCK && body->data.block.count) {
+      if (body->data.block.statements[body->data.block.count - 1]->kind ==
+          AST_RETURN) {
+        ends_with_return = true;
+      }
+    }
+
+    if (ends_with_return == false) {
+      DataType body_type = node->data.func_def.block->result_type;
+      if (symbol->type == TYPE_UNKNOWN) {
+        if (body_type == TYPE_UNKNOWN) {
+          return ERR_TYPE;
+        }
+        symbol->type = body_type;
+        node->data.func_def.return_type = body_type;
+        node->result_type = body_type;
+      } else if (symbol->type != TYPE_UNIT) {
+        if (!is_assignable(symbol->type, body_type)) {
+          return ERR_TYPE;
+        }
+      }
+    }
+
     break;
+  }
 
   case AST_FUNC_CALL: {
     Symbol *symbol = st_lookup(symtable, node->data.func_call.name);
@@ -207,6 +270,10 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   }
 
   case AST_RETURN: {
+    if (current_function->type == TYPE_UNKNOWN) {
+      return ERR_TYPE;
+    }
+
     DataType value_type = TYPE_UNIT;
     if (node->data.return_state.expression != NULL) {
       ErrorCode analyze_expression =
@@ -385,4 +452,4 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   }
 
   return ERR_OK;
-}
+} // analyze_node
