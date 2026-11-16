@@ -22,7 +22,7 @@
 #include <semantic.h>
 
 int main(void) {
-  scannerscanner_init(stdin);
+  scanner_init(stdin);
   AstNode *root = parser_parse();
 
   ErrorCode err = sem_analyze(root);
