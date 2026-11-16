@@ -180,7 +180,7 @@ static int reduce(Stack *s) {
       s->top->next->type == SYMBOL_TERMINAL &&
       s->top->next->operator== LPAREN && s->top->next->next != NULL &&
       s->top->next->next->type == SYMBOL_STOP) {
-    AstNode *node = ast_new(AST_UNIT_LIT, s->top->next->line);
+    AstNode *node = ast_unit(s->top->next->line);
     if (node == NULL) {
       return ERR_INTERNAL;
     }
