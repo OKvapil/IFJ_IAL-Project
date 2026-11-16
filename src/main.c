@@ -17,31 +17,12 @@
 #include "generator.h"
 #include "parser.h"
 #include "scanner.h"
+#include "semantic.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <semantic.h>
 
 int main(void) {
   scanner_init(stdin);
-  AstNode *root = parser_parse();
-
-  ErrorCode err = sem_analyze(root);
-  if (err != ERR_OK) {
-    ast_free(root);
-    scanner_cleanup();
-    return err;
-  }
-
-  if (!gen_program(root)) {
-    ast_free(root);
-    scanner_cleanup();
-    return ERR_INTERNAL;
-  }
-  ast_free(root);
-  scanner_cleanup();
-
-  return ERR_OK;
-  _init(stdin);
   AstNode *root = parser_parse();
 
   ErrorCode err = sem_analyze(root);
