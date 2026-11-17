@@ -879,7 +879,7 @@ int scanner_get_next_token(Token *token) {
         // escape sequence?
         state = STATE_STRING_ESCAPE;
         break;
-      } else if (c == EOF || (unsigned char)c < 32) {
+      } else if (c == EOF || (unsigned char)c < 32 || (unsigned char)c > 127) {
         // unterminated string literal and not allowed chars
         return ERR_LEXICAL;
       } else {
@@ -894,7 +894,7 @@ int scanner_get_next_token(Token *token) {
         // escape sequence?
         state = STATE_STRING_ESCAPE;
         break;
-      } else if (c == EOF || (unsigned char)c < 32) {
+      } else if (c == EOF || (unsigned char)c < 32 || (unsigned char)c > 127) {
         // unterminated string literal and not allowed chars
         return ERR_LEXICAL;
       } else if (c == '"') {
@@ -967,6 +967,10 @@ int scanner_get_next_token(Token *token) {
         current_line++;
         scanner_buffer_append(&s_buf, c);
         break;
+      } else if ((unsigned char)c > 127 ||
+                 ((unsigned char)c < 32 && c != '\r' && c != '\t')) {
+        // not allowed characters
+        return ERR_LEXICAL;
       } else {
         // string body
         scanner_buffer_append(&s_buf, c);
@@ -987,6 +991,10 @@ int scanner_get_next_token(Token *token) {
         scanner_buffer_append(&s_buf, c);
         state = STATE_MSTR;
         break;
+      } else if ((unsigned char)c > 127 ||
+                 ((unsigned char)c < 32 && c != '\r' && c != '\t')) {
+        // not allowed characters
+        return ERR_LEXICAL;
       } else {
         // string body
         scanner_buffer_append(&s_buf, '"');
@@ -1011,6 +1019,10 @@ int scanner_get_next_token(Token *token) {
         scanner_buffer_append(&s_buf, c);
         state = STATE_MSTR;
         break;
+      } else if ((unsigned char)c > 127 ||
+                 ((unsigned char)c < 32 && c != '\r' && c != '\t')) {
+        // not allowed characters
+        return ERR_LEXICAL;
       } else {
         // string body
         scanner_buffer_append(&s_buf, '"');
