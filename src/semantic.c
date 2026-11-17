@@ -9,6 +9,7 @@
 
 #include "semantic.h"
 #include "symtable.h"
+#include <stdlib.h>
 
 static bool is_numeric(DataType type) {
   if (type == TYPE_INT || type == TYPE_DOUBLE) {
@@ -28,6 +29,9 @@ static DataType binary_result_type(DataType op1_type, DataType op2_type) {
 }
 
 static bool is_assignable(DataType decl_type, DataType init_type) {
+  if (init_type == TYPE_UNKNOWN) {
+    return false;
+  }
   if ((decl_type == TYPE_DOUBLE && init_type == TYPE_INT) ||
       (decl_type == init_type) || (decl_type == TYPE_ANY)) {
     return true;
@@ -36,6 +40,36 @@ static bool is_assignable(DataType decl_type, DataType init_type) {
 }
 
 static Symbol *current_function;
+
+static bool always_returns(AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  switch (node->kind) {
+  case AST_RETURN:
+    return true;
+
+  case AST_BLOCK:
+    if (node->data.block.count > 0 &&
+        always_returns(
+            node->data.block.statements[node->data.block.count - 1])) {
+      return true;
+    }
+    return false;
+
+  case AST_IF:
+    if (node->data.if_state.else_block != NULL &&
+        always_returns(node->data.if_state.then_block) &&
+        always_returns(node->data.if_state.else_block)) {
+      return true;
+    }
+    return false;
+
+  default:
+    return false;
+  }
+}
 
 static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   switch (node->kind) {
@@ -215,14 +249,7 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     current_function = saved;
     st_exit_scope(symtable);
 
-    bool ends_with_return = false;
-    AstNode *body = node->data.func_def.block;
-    if (body->kind == AST_BLOCK && body->data.block.count) {
-      if (body->data.block.statements[body->data.block.count - 1]->kind ==
-          AST_RETURN) {
-        ends_with_return = true;
-      }
-    }
+    bool ends_with_return = always_returns(node->data.func_def.block);
 
     if (ends_with_return == false) {
       DataType body_type = node->data.func_def.block->result_type;
@@ -327,12 +354,23 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
       else_type = node->data.if_state.else_block->result_type;
     }
 
-    if (then_type == else_type) {
+    if (always_returns(node->data.if_state.then_block) &&
+        always_returns(node->data.if_state.else_block)) {
+      node->result_type = TYPE_UNIT;
+    } else if (always_returns(node->data.if_state.then_block) &&
+               !always_returns(node->data.if_state.else_block)) {
+      node->result_type = else_type;
+    } else if (!always_returns(node->data.if_state.then_block) &&
+               always_returns(node->data.if_state.else_block)) {
       node->result_type = then_type;
-    } else if (binary_result_type(then_type, else_type) == TYPE_DOUBLE) {
-      node->result_type = TYPE_DOUBLE;
     } else {
-      node->result_type = TYPE_UNKNOWN;
+      if (then_type == else_type) {
+        node->result_type = then_type;
+      } else if (binary_result_type(then_type, else_type) == TYPE_DOUBLE) {
+        node->result_type = TYPE_DOUBLE;
+      } else {
+        node->result_type = TYPE_UNKNOWN;
+      }
     }
 
     break;
@@ -453,3 +491,87 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
 
   return ERR_OK;
 } // analyze_node
+
+static ErrorCode analyze_program(AstNode *root, SymTable *symtable) {
+  size_t main_count = 0;
+  AstNode *main_def = NULL;
+
+  for (size_t i = 0; i < root->data.block.count; i++) {
+    AstNode *def = root->data.block.statements[i];
+    if (def->kind != AST_FUNC_DEF) {
+      return ERR_INTERNAL;
+    }
+
+    /* AI-generated (Claude). Prompt: "Generate code for the arrays" for the
+    signature pass in sem_analyze: temporary type and name arrays. */
+    size_t count = def->data.func_def.param_count;
+    DataType *types = NULL;
+    const char **names = NULL;
+    if (count > 0) {
+      types = malloc(count * sizeof(DataType));
+      names = malloc(count * sizeof(char *));
+      if (types == NULL || names == NULL) {
+        free(types);
+        free(names);
+        return ERR_INTERNAL;
+      }
+      for (size_t j = 0; j < count; j++) {
+        AstNode *param = def->data.func_def.params[j];
+        types[j] = param->data.var_dec.var_type;
+        names[j] = param->data.var_dec.name;
+      }
+    }
+
+    DeclarationCode decl_fun = st_declare_fun(symtable, def->data.func_def.name,
+                                              def->data.func_def.return_type,
+                                              (int)count, types, names, NULL);
+    free(types);
+    free(names);
+    if (decl_fun == DECL_REDEF) {
+      return ERR_REDEFINITION;
+    } else if (decl_fun == DECL_ALLOC_FAIL) {
+      return ERR_INTERNAL;
+    }
+
+    if (def->data.func_def.is_main) {
+      main_count++;
+      main_def = def;
+    }
+  }
+
+  if (main_count == 0) {
+    return ERR_UNDEFINED;
+  } else if (main_count > 1) {
+    return ERR_REDEFINITION;
+  }
+
+  if (main_def->data.func_def.param_count != 0) {
+    return ERR_CALL_ARGS;
+  } else if (main_def->data.func_def.return_type != TYPE_UNIT) {
+    return ERR_TYPE;
+  }
+
+  current_function = NULL;
+  for (size_t i = 0; i < root->data.block.count; i++) {
+    ErrorCode result = analyze_node(root->data.block.statements[i], symtable);
+    if (result != ERR_OK) {
+      return result;
+    }
+  }
+
+  return ERR_OK;
+}
+
+ErrorCode sem_analyze(AstNode *root) {
+  SymTable *symtable = st_init();
+  if (symtable == NULL) {
+    return ERR_INTERNAL;
+  }
+
+  ErrorCode analyzed_program = analyze_program(root, symtable);
+
+  st_dispose(symtable);
+  current_function = NULL;
+
+  return analyzed_program;
+}
