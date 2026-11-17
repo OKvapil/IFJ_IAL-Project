@@ -166,9 +166,22 @@ static AstNode *parse_program(void) {
  **/
 static void parse_import(void) {
   check_token(TOKEN_KW_IMPORT);
+  if (current_token.type != TOKEN_IDENTIFIER ||
+      current_token.attr.str_val == NULL ||
+      strcmp(current_token.attr.str_val, "ifj26") != 0) {
+    fprintf(stderr, "Syntax error: expected 'ifj26' in import at line %zu\n",
+            current_token.line);
+    exit(ERR_SYNTAX);
+  }
   check_token(TOKEN_IDENTIFIER);
   check_token(TOKEN_DOT);
   check_token(TOKEN_MUL);
+  if (current_token.type != TOKEN_EOL && current_token.type != TOKEN_EOF) {
+    fprintf(stderr,
+            "Syntax error: expected end of line after import at line %zu\n",
+            current_token.line);
+    exit(ERR_SYNTAX);
+  }
 }
 
 /**
@@ -231,6 +244,17 @@ static AstNode *parse_statement(void) {
     }
     return parse_expression_from(&current_token, first);
   }
+  case TOKEN_INT_LIT:
+  case TOKEN_DOUBLE_LIT:
+  case TOKEN_STRING_LIT:
+  case TOKEN_KW_TRUE:
+  case TOKEN_KW_FALSE:
+  case TOKEN_LPAREN:
+  case TOKEN_MINUS:
+  case TOKEN_PLUS:
+  case TOKEN_NOT:
+    return parse_expression(&current_token);
+
   default:
     fprintf(stderr, "Syntax error: expected statement at line %zu\n",
             current_token.line);
