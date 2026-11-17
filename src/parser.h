@@ -1,7 +1,6 @@
 /**
  * @file parser.h
- * @brief IFJcode26 header file for parser function
- *        that checks token  (implementation)
+ * @brief Syntax analysis of IFJ26 source code
  *
  * IFJ/IAL project - IFJ26 compiler
  *
@@ -11,6 +10,14 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-void check_token(TokenType expected_token);
+#include "ast.h"
+
+/**
+ * @brief Entry point of the syntax analyzer. Reads the first token,
+ *        parses the entire IFJ26 program, and returns the root AST node.
+ *
+ * @return Pointer to the root AST_BLOCK node of the program.
+ */
+AstNode *parser_parse(void);
 
 #endif // PARSER_H
