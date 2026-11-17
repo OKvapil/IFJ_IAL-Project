@@ -142,7 +142,7 @@ static void stack_free(Stack *s);
 
 static int move_next_token(Token *token);
 
-AstNode *parse_expression(Token *token);
+static AstNode *parse_expression_impl(Token *token, AstNode *first_operand);
 
 static void err_state(Token *id_tok, AstNode *args_block, Stack *stack,
                       int exit_code);
@@ -312,10 +312,13 @@ static int move_next_token(Token *token) {
   return scanner_get_next_token(token);
 }
 
-AstNode *parse_expression(Token *token) {
+static AstNode *parse_expression_impl(Token *token, AstNode *first_operand) {
   Stack stack;
   init_stack(&stack);
   push_stack(&stack, SYMBOL_TERMINAL, DOLLAR, TOKEN_EOF, 0, NULL);
+  if (first_operand != NULL) {
+    push_stack(&stack, SYMBOL_NONTERMINAL, DOLLAR, TOKEN_EOF, 0, first_operand);
+  }
   while (true) {
     StackNode *upper = stack_top_terminal(&stack);
     OperatorsTable a = upper->operator;
@@ -418,6 +421,14 @@ AstNode *parse_expression(Token *token) {
     stack_free(&stack);
     exit(ERR_SYNTAX);
   }
+}
+
+AstNode *parse_expression(Token *token) {
+  return parse_expression_impl(token, NULL);
+}
+
+AstNode *parse_expression_from(Token *token, AstNode *first_operand) {
+  return parse_expression_impl(token, first_operand);
 }
 
 static void err_state(Token *id_tok, AstNode *args_block, Stack *stack,
