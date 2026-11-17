@@ -243,6 +243,8 @@ static void scanner_static_cleanup(void) {
 }
 
 void scanner_init(FILE *source) {
+  scanner_buffer_free(&s_buf);
+
   if (source != NULL) {
     source_file = source;
   } else {
@@ -270,6 +272,8 @@ int scanner_get_next_token(Token *token) {
     fprintf(stderr, "Internal error: Null pointer passed as token.\n");
     return (ERR_INTERNAL);
   }
+
+  memset(&token->attr, 0, sizeof(token->attr));
 
   // pending dedents have priority
   if (pending_dedents > 0) {
@@ -471,29 +475,17 @@ int scanner_get_next_token(Token *token) {
 
     /* --- DIVISION AND COMMENTS --- */
     case STATE_SLASH:
-      if (c == '/') {
-        state = STATE_COM_LINE;
-        break;
-      } else if (c == '*') {
-        if (comment_depth == 0) {
-          line_had_token = !at_line_start;
-        }
-        comment_depth++;
-        state = STATE_COM_BLOCK;
-        break;
-      } else {
-        if (com_newline) {
-          return ERR_LEXICAL;
-        }
-        if (at_line_start && has_tab) {
-          return ERR_LEXICAL;
-        }
-        at_line_start = false;
-        ungetc(c, source_file);
-        token->type = TOKEN_DIV;
-        token->line = current_line;
-        return 0;
+      if (com_newline) {
+        return ERR_LEXICAL;
       }
+      if (at_line_start && has_tab) {
+        return ERR_LEXICAL;
+      }
+      at_line_start = false;
+      ungetc(c, source_file);
+      token->type = TOKEN_DIV;
+      token->line = current_line;
+      return 0;
 
     case STATE_COM_LINE:
       if (c == EOF) {
@@ -708,9 +700,14 @@ int scanner_get_next_token(Token *token) {
       } else {
         // Return int token
         ungetc(c, source_file);
+        errno = 0;
+        long long val = strtoll(s_buf.data, NULL, 10);
+        if (errno == ERANGE) {
+          return ERR_LEXICAL;
+        }
+        token->attr.int_val = val;
         token->type = TOKEN_INT_LIT;
         token->line = current_line;
-        token->attr.int_val = strtoll(s_buf.data, NULL, 10);
         return 0;
       }
 
@@ -882,8 +879,8 @@ int scanner_get_next_token(Token *token) {
         // escape sequence?
         state = STATE_STRING_ESCAPE;
         break;
-      } else if (c == EOF || c == '\n') {
-        // unterminated string literal
+      } else if (c == EOF || (unsigned char)c < 32) {
+        // unterminated string literal and not allowed chars
         return ERR_LEXICAL;
       } else {
         // line string
@@ -897,8 +894,8 @@ int scanner_get_next_token(Token *token) {
         // escape sequence?
         state = STATE_STRING_ESCAPE;
         break;
-      } else if (c == EOF || c == '\n') {
-        // unterminated string literal
+      } else if (c == EOF || (unsigned char)c < 32) {
+        // unterminated string literal and not allowed chars
         return ERR_LEXICAL;
       } else if (c == '"') {
         token->type = TOKEN_STRING_LIT;
@@ -1042,7 +1039,7 @@ int scanner_get_next_token(Token *token) {
     case STATE_START:
 
       /* --- WHITESPACE --- */
-      if (isspace(c)) {
+      if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
         /* --- LF --- */
         if (c == '\n') {
           current_line++;
