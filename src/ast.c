@@ -98,12 +98,12 @@ AstNode *ast_from_token(Token *value) {
     break;
   case TOKEN_KW_TRUE:
     node->kind = AST_BOOL_LIT;
-    node->data.bool_value = TOKEN_KW_TRUE;
+    node->data.bool_value = true;
     node->result_type = TYPE_BOOL;
     break;
   case TOKEN_KW_FALSE:
     node->kind = AST_BOOL_LIT;
-    node->data.bool_value = TOKEN_KW_FALSE;
+    node->data.bool_value = false;
     node->result_type = TYPE_BOOL;
     break;
   default:
