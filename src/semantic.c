@@ -368,7 +368,8 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
       value_type = node->data.return_state.expression->result_type;
     }
 
-    if (node->data.return_state.expression == NULL && current_function->type != TYPE_UNIT) {
+    if (node->data.return_state.expression == NULL &&
+        current_function->type != TYPE_UNIT) {
       return ERR_OTHER_SEMANTIC;
     }
 
@@ -569,13 +570,14 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     }
 
     if (node->data.for_state.step != NULL) {
-      ErrorCode analyze_step = analyze_node(node->data.for_state.step, symtable);
+      ErrorCode analyze_step =
+          analyze_node(node->data.for_state.step, symtable);
       if (analyze_step != ERR_OK) {
         return analyze_step;
       }
     }
 
-    if (node->data.for_state.from->result_type != TYPE_INT || 
+    if (node->data.for_state.from->result_type != TYPE_INT ||
         node->data.for_state.to->result_type != TYPE_INT) {
       return ERR_TYPE;
     }
@@ -585,7 +587,8 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
         return ERR_TYPE;
       }
 
-      if (node->data.for_state.step->kind == AST_INT_LIT && node->data.for_state.step->data.int_value == 0) {
+      if (node->data.for_state.step->kind == AST_INT_LIT &&
+          node->data.for_state.step->data.int_value == 0) {
         return ERR_OTHER_SEMANTIC;
       }
     }
@@ -595,7 +598,8 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     }
 
     Symbol *symbol = NULL;
-    DeclarationCode declare_var = st_declare_var(symtable, node->data.for_state.var_name, TYPE_INT, false, &symbol);
+    DeclarationCode declare_var = st_declare_var(
+        symtable, node->data.for_state.var_name, TYPE_INT, false, &symbol);
     if (declare_var == DECL_REDEF) {
       return ERR_REDEFINITION;
     } else if (declare_var == DECL_ALLOC_FAIL) {
@@ -604,7 +608,8 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     node->var_id = symbol->var_unique_id;
 
     for (size_t i = 0; i < node->data.for_state.guard_count; i++) {
-      ErrorCode analyze_guard = analyze_node(node->data.for_state.guards[i], symtable);
+      ErrorCode analyze_guard =
+          analyze_node(node->data.for_state.guards[i], symtable);
       if (analyze_guard != ERR_OK) {
         return analyze_guard;
       }
@@ -622,7 +627,6 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
     node->result_type = TYPE_UNIT;
     break;
   }
-
   }
 
   return ERR_OK;
@@ -683,7 +687,8 @@ static ErrorCode analyze_program(AstNode *root, SymTable *symtable) {
 
   if (main_def->data.func_def.param_count != 0) {
     return ERR_CALL_ARGS;
-  } else if (main_def->data.func_def.return_type != TYPE_UNIT && main_def->data.func_def.return_type != TYPE_UNKNOWN) {
+  } else if (main_def->data.func_def.return_type != TYPE_UNIT &&
+             main_def->data.func_def.return_type != TYPE_UNKNOWN) {
     return ERR_TYPE;
   }
 
