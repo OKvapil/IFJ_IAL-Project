@@ -632,6 +632,147 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
   return ERR_OK;
 } // analyze_node
 
+static bool check_indirect_recursive(AstNode *node, size_t target_idx, size_t *visited) {
+  if (node == NULL) {
+    return false;
+  }
+  
+  switch (node->kind) {
+    case AST_BLOCK:
+      for (size_t i = 0; i < node->data.block.count; i++) {
+        if (check_indirect_recursive(node->data.block.statements[i], target_idx, visited)) {
+          return true;
+        }
+      }
+      break;
+
+    case AST_FUNC_CALL: {
+      for (size_t i = 0; i < node->data.func_call.arg_count; i++) {
+        if (check_indirect_recursive(node->data.func_call.args[i], target_idx, visited)) {
+          return true;
+        }
+      }
+
+      size_t idx = get_function_index(node->data.func_call.name);
+      if (idx == (size_t)-1) {
+        return false;
+      }
+
+      if (idx == target_idx) {
+        return true;
+      }
+
+      if (visited[idx] == 0) {
+        visited[idx] = 1;
+        if (check_indirect_recursive(program_root->data.block.statements[idx]->data.func_def.block, target_idx, visited)) {
+          return true;
+        }
+      }
+
+      break;
+    }
+
+    case AST_FOR:
+      for (size_t i = 0; i < node->data.for_state.guard_count; i++) {
+        if (check_indirect_recursive(node->data.for_state.guards[i], target_idx, visited)) {
+          return true;
+        }
+      }
+      
+      if (check_indirect_recursive(node->data.for_state.from, target_idx, visited) || 
+          check_indirect_recursive(node->data.for_state.to, target_idx, visited) ||
+          check_indirect_recursive(node->data.for_state.step, target_idx, visited) ||
+          check_indirect_recursive(node->data.for_state.body, target_idx, visited)) {
+        return true;
+      }
+
+      break;
+
+    case AST_UNARY:
+      if (check_indirect_recursive(node->data.unary.operand, target_idx, visited)) {
+        return true;
+      }
+      break;
+
+    case AST_BINARY:
+      if (check_indirect_recursive(node->data.binary.left, target_idx, visited) || check_indirect_recursive(node->data.binary.right, target_idx, visited)) {
+        return true;
+      }
+      break;
+
+    case AST_RETURN:
+      if (check_indirect_recursive(node->data.return_state.expression, target_idx, visited)) {
+        return true;
+      }
+      break;
+
+    case AST_IF:
+      if (check_indirect_recursive(node->data.if_state.cond, target_idx, visited) || 
+          check_indirect_recursive(node->data.if_state.then_block, target_idx, visited) || 
+          check_indirect_recursive(node->data.if_state.else_block, target_idx, visited)) {
+        return true;
+      }
+      break;
+
+    case AST_WHILE:
+      if (check_indirect_recursive(node->data.while_state.cond, target_idx, visited) || check_indirect_recursive(node->data.while_state.block, target_idx, visited)) {
+        return true;
+      }
+      break;
+
+    case AST_ASSIGN:
+      if (check_indirect_recursive(node->data.expr_assign.value, target_idx, visited)) {
+        return true;
+      }
+      break;
+
+    case AST_VAL:
+      if (check_indirect_recursive(node->data.var_dec.init_expr, target_idx, visited)) {
+        return true;
+      }
+      break;
+
+    case AST_VAR:
+      if (check_indirect_recursive(node->data.var_dec.init_expr, target_idx, visited)) {
+        return true;
+      }
+      break;
+
+    case AST_INT_LIT:
+    case AST_DOUBLE_LIT:
+    case AST_STRING_LIT:
+    case AST_BOOL_LIT:
+    case AST_UNIT_LIT:
+    case AST_IDENTIFIER:
+    case AST_FUNC_DEF:
+      return false;
+  }
+  return false;
+
+}
+
+static ErrorCode find_indirect_recursive(AstNode *root) {
+  size_t *visited = calloc(root->data.block.count + 1, sizeof(size_t));
+  if (visited == NULL) {
+    return ERR_INTERNAL;
+  }
+
+  for (size_t i = 0; i < root->data.block.count; i++) {
+    if (root->data.block.statements[i]->data.func_def.return_type == TYPE_UNKNOWN) {
+      for (size_t j = 0; j < root->data.block.count + 1; j++) {
+        visited[j] = 0;
+      }
+      if (check_indirect_recursive(program_root->data.block.statements[i]->data.func_def.block, i, visited)) {
+        free(visited);
+        return ERR_TYPE;
+      }
+    }
+  }
+
+  free(visited);
+  return ERR_OK;
+}
+
 static ErrorCode analyze_program(AstNode *root, SymTable *symtable) {
   size_t main_count = 0;
   AstNode *main_def = NULL;
@@ -690,6 +831,11 @@ static ErrorCode analyze_program(AstNode *root, SymTable *symtable) {
   } else if (main_def->data.func_def.return_type != TYPE_UNIT &&
              main_def->data.func_def.return_type != TYPE_UNKNOWN) {
     return ERR_TYPE;
+  }
+
+  ErrorCode indirect_recursive = find_indirect_recursive(program_root);
+  if (indirect_recursive != ERR_OK) {
+    return indirect_recursive;
   }
 
   current_function = NULL;
