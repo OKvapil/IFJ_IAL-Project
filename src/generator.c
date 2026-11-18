@@ -35,6 +35,13 @@ static DataType current_return_type = TYPE_UNKNOWN;
  */
 static const AstNode *program_root = NULL;
 
+/** @brief Type of every variable, indexed by var_id (filled by gen_def_vars).
+ */
+static DataType *var_types = NULL;
+
+/** @brief Number of items allocated in var_types. */
+static size_t var_types_count = 0;
+
 /** @brief Names of the IFJ26 built-in functions, used by is_builtin. */
 static const char *const builtin_names[] = {
     "print",     "readLine", "readInt", "readDouble", "toStr",       "toInt",
@@ -80,6 +87,7 @@ static bool is_expr_node(const AstNode *node) {
   case AST_UNARY:
   case AST_FUNC_CALL:
   case AST_BOOL_LIT:
+  case AST_UNIT_LIT:
     return true;
   case AST_IF:
     return node->result_type != TYPE_UNKNOWN && node->result_type != TYPE_UNIT;
@@ -127,6 +135,55 @@ static const AstNode *find_function(const char *name) {
     }
   }
   return NULL;
+}
+
+/**
+ * @brief Remembers the type of a variable for gen_assign.
+ *
+ * @param var_id Unique id of the variable.
+ * @param type Type of the variable.
+ * @return true on success, false for a negative id or an allocation failure.
+ */
+static bool set_var_type(int var_id, DataType type) {
+  if (var_id < 0) {
+    return false;
+  }
+
+  size_t idx = (size_t)var_id;
+
+  if (idx >= var_types_count) {
+    size_t new_size = var_types_count == 0 ? 64 : var_types_count;
+    while (new_size <= idx) {
+      new_size *= 2;
+    }
+
+    DataType *tmp = realloc(var_types, new_size * sizeof(DataType));
+    if (tmp == NULL) {
+      return false;
+    }
+
+    for (size_t jdx = var_types_count; jdx < new_size; jdx++) {
+      tmp[jdx] = TYPE_UNKNOWN;
+    }
+    var_types = tmp;
+    var_types_count = new_size;
+  }
+  var_types[idx] = type;
+
+  return true;
+}
+
+/**
+ * @brief Returns the type of a variable remembered by set_var_type.
+ *
+ * @param var_id Unique id of the variable.
+ * @return The type, or TYPE_UNKNOWN if it is not known.
+ */
+static DataType get_var_type(int var_id) {
+  if (var_id < 0 || (size_t)var_id >= var_types_count) {
+    return TYPE_UNKNOWN;
+  }
+  return var_types[var_id];
 }
 
 /**
@@ -511,8 +568,8 @@ static bool gen_unary(const AstNode *node) {
  * @brief Generates an assignment: evaluates the value and pops it into the
  *        variable.
  *
- * The value is converted from Int to Double if the variable (result_type of
- * the node) is Double.
+ * The value is converted from Int to Double if the variable is Double
+ * (its type is remembered by gen_def_vars, the node itself has type Unit).
  *
  * @param node AST_ASSIGN node.
  * @return true on success, false on an invalid node.
@@ -533,7 +590,7 @@ static bool gen_assign(const AstNode *node) {
   }
 
   if (needs_int2float(node->data.expr_assign.value->result_type,
-                      node->result_type)) {
+                      get_var_type(node->var_id))) {
     codegen_int2floats();
   }
 
@@ -626,6 +683,9 @@ static bool gen_def_vars(const AstNode *node) {
       return false;
     }
     codegen_defvar(name);
+    if (!set_var_type(node->var_id, node->data.var_dec.var_type)) {
+      return false;
+    }
     return gen_def_vars(node->data.var_dec.init_expr);
   }
 
@@ -960,6 +1020,9 @@ static bool gen_branch_value(const AstNode *branch, DataType result_type) {
     }
 
     value = statements[count - 1];
+    if (value->kind == AST_RETURN) {
+      return gen_statement(value);
+    }
     if (!is_expr_node(value)) {
       return false;
     }
@@ -1080,6 +1143,9 @@ bool gen_expr(const AstNode *node) {
   }
   case AST_IF:
     return gen_if_expr(node);
+  case AST_UNIT_LIT:
+    codegen_pushs("nil@nil");
+    return true;
   default:
     return false;
   }
@@ -1408,5 +1474,8 @@ bool gen_program(const AstNode *root) {
   }
 
   gen_program_end();
+  free(var_types);
+  var_types = NULL;
+  var_types_count = 0;
   return true;
 }
