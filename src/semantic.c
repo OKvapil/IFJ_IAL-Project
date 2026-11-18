@@ -10,6 +10,7 @@
 #include "semantic.h"
 #include "symtable.h"
 #include <stdlib.h>
+#include <string.h>
 
 static bool is_numeric(DataType type) {
   if (type == TYPE_INT || type == TYPE_DOUBLE) {
@@ -40,6 +41,8 @@ static bool is_assignable(DataType decl_type, DataType init_type) {
 }
 
 static Symbol *current_function;
+static AstNode *program_root;
+static unsigned char *infer_state_flags;
 
 static bool always_returns(AstNode *node) {
   if (node == NULL) {
@@ -69,6 +72,16 @@ static bool always_returns(AstNode *node) {
   default:
     return false;
   }
+}
+
+static size_t get_function_index(const char *name) {
+  for (size_t i = 0; i < program_root->data.block.count; i++) {
+    AstNode *def = program_root->data.block.statements[i];
+    if (strcmp(def->data.func_def.name, name) == 0) {
+      return i;
+    }
+  }
+  return (size_t)-1;
 }
 
 static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
@@ -217,6 +230,15 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
       return ERR_INTERNAL;
     }
 
+    size_t function_index = get_function_index(node->data.func_def.name);
+    if (function_index == (size_t)-1) {
+      return ERR_INTERNAL;
+    }
+    if (infer_state_flags[function_index] == 2) {
+      return ERR_OK;
+    }
+    infer_state_flags[function_index] = 1;
+
     if (st_enter_scope(symtable) == -1) {
       return ERR_INTERNAL;
     }
@@ -267,6 +289,8 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
       }
     }
 
+    infer_state_flags[function_index] = 2;
+
     break;
   }
 
@@ -290,6 +314,39 @@ static ErrorCode analyze_node(AstNode *node, SymTable *symtable) {
                           node->data.func_call.args[i]->result_type))) {
         return ERR_CALL_ARGS;
       }
+    }
+
+    if (symbol->type == TYPE_UNKNOWN) {
+      size_t function_index = get_function_index(node->data.func_call.name);
+      if (function_index == (size_t)-1) {
+        return ERR_INTERNAL;
+      }
+      if (infer_state_flags[function_index] == 1) {
+        return ERR_TYPE;
+      } else if (infer_state_flags[function_index] == 0) {
+        SymScope *current_scope = symtable->current_scope;
+        SymScope *global_scope = current_scope;
+        while (global_scope->outer != NULL) {
+          global_scope = global_scope->outer;
+        }
+
+        symtable->current_scope = global_scope;
+
+        ErrorCode analyze_function = analyze_node(
+            program_root->data.block.statements[function_index], symtable);
+
+        while (symtable->current_scope != global_scope) {
+          st_exit_scope(symtable);
+        }
+        symtable->current_scope = current_scope;
+
+        if (analyze_function != ERR_OK) {
+          return analyze_function;
+        }
+      }
+    }
+    if (symbol->type == TYPE_UNKNOWN) {
+      return ERR_TYPE;
     }
 
     node->result_type = symbol->type;
@@ -567,11 +624,22 @@ ErrorCode sem_analyze(AstNode *root) {
   if (symtable == NULL) {
     return ERR_INTERNAL;
   }
+  program_root = root;
+
+  infer_state_flags = calloc(root->data.block.count + 1, sizeof(char));
+  if (infer_state_flags == NULL) {
+    st_dispose(symtable);
+    program_root = NULL;
+    return ERR_INTERNAL;
+  }
 
   ErrorCode analyzed_program = analyze_program(root, symtable);
 
   st_dispose(symtable);
   current_function = NULL;
+  free(infer_state_flags);
+  infer_state_flags = NULL;
+  program_root = NULL;
 
   return analyzed_program;
 }
