@@ -19,7 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-static Token current_token;
+Token current_token;
+size_t last_token_line = 1;
 
 static AstNode *parse_program(void);
 
@@ -36,8 +37,6 @@ static DataType parse_type(void);
 static AstNode *parse_func_def(bool is_main);
 
 static AstNode *parse_return_state(void);
-
-static AstNode *parse_if_state(void);
 
 static AstNode *parse_while_do_state(void);
 
@@ -61,6 +60,11 @@ static AstNode *parse_value_or_if(void);
  **/
 static void check_token(TokenType expected_token) {
   if (current_token.type == expected_token) {
+    if (current_token.type != TOKEN_INDENT &&
+        current_token.type != TOKEN_DEDENT &&
+        current_token.type != TOKEN_EOL) {
+      last_token_line = current_token.line;
+    }
     token_clear(&current_token);
     int lex_res = scanner_get_next_token(&current_token);
     if (lex_res != ERR_OK) {
@@ -95,6 +99,7 @@ AstNode *parser_parse(void) {
   if (scanner_get_next_token(&current_token) != ERR_OK) {
     exit(ERR_LEXICAL);
   }
+  last_token_line = current_token.line;
   return parse_program();
 }
 
@@ -114,7 +119,19 @@ static AstNode *parse_func_call(char *name, size_t line) {
       AstNode *arg = parse_expression(&current_token);
       ast_block_add_stmt(args_block, arg);
       if (current_token.type == TOKEN_COMMA) {
+        size_t comma_line = current_token.line;
         check_token(TOKEN_COMMA);
+        if (current_token.type == TOKEN_RPAREN) {
+          if (current_token.line > comma_line) {
+            break;
+          } else {
+            fprintf(stderr,
+                    "Syntax error: trailing comma requires newline before ')' "
+                    "at line %zu\n",
+                    current_token.line);
+            exit(ERR_SYNTAX);
+          }
+        }
       } else {
         break;
       }
@@ -153,6 +170,18 @@ static AstNode *parse_program(void) {
     default:
       fprintf(stderr,
               "Syntax error: Expected function definition at line %zu\n",
+              current_token.line);
+      exit(ERR_SYNTAX);
+    }
+    if (current_token.type == TOKEN_SEMICOLON) {
+      check_token(TOKEN_SEMICOLON);
+    } else if (current_token.type == TOKEN_EOL) {
+      check_token(TOKEN_EOL);
+    } else if (current_token.type != TOKEN_EOF &&
+               current_token.line == last_token_line) {
+      fprintf(stderr,
+              "Syntax error: expected ';' or newline between definitions at "
+              "line %zu\n",
               current_token.line);
       exit(ERR_SYNTAX);
     }
@@ -250,9 +279,6 @@ static AstNode *parse_statement(void) {
   case TOKEN_KW_TRUE:
   case TOKEN_KW_FALSE:
   case TOKEN_LPAREN:
-  case TOKEN_MINUS:
-  case TOKEN_PLUS:
-  case TOKEN_NOT:
     return parse_expression(&current_token);
 
   default:
@@ -271,7 +297,7 @@ static AstNode *parse_block(void) {
   check_token(TOKEN_EOL);
   check_token(TOKEN_INDENT);
   AstNode *block = ast_block();
-  while (current_token.type != TOKEN_DEDENT) {
+  while (current_token.type != TOKEN_DEDENT && current_token.type != TOKEN_EOF) {
     if (current_token.type == TOKEN_EOL) {
       check_token(TOKEN_EOL);
     } else {
@@ -279,10 +305,22 @@ static AstNode *parse_block(void) {
       ast_block_add_stmt(block, stmt);
       if (current_token.type == TOKEN_SEMICOLON) {
         check_token(TOKEN_SEMICOLON);
+      } else if (current_token.type == TOKEN_EOL) {
+        check_token(TOKEN_EOL);
+      } else if (current_token.type != TOKEN_DEDENT &&
+                 current_token.type != TOKEN_EOF &&
+                 current_token.line == last_token_line) {
+        fprintf(stderr,
+                "Syntax error: expected ';' between statements on the same "
+                "line at line %zu\n",
+                current_token.line);
+        exit(ERR_SYNTAX);
       }
     }
   }
-  check_token(TOKEN_DEDENT);
+  if (current_token.type == TOKEN_DEDENT) {
+    check_token(TOKEN_DEDENT);
+  }
   return block;
 }
 
@@ -308,6 +346,11 @@ static DataType parse_type(void) {
   case TOKEN_KW_BOOLEAN:
     check_token(TOKEN_KW_BOOLEAN);
     return TYPE_BOOL;
+  case TOKEN_IDENTIFIER:
+    fprintf(stderr, "Semantic error: undefined type '%s' at line %zu\n",
+            current_token.attr.str_val ? current_token.attr.str_val : "",
+            current_token.line);
+    exit(ERR_UNDEFINED);
   default:
     fprintf(stderr, "Syntax error: expected type at line %zu\n",
             current_token.line);
@@ -372,7 +415,7 @@ static AstNode *parse_return_state(void) {
  *and block of statements. If it has "else" block, function check the block too.
  * @return AstNode to ast_if func
  **/
-static AstNode *parse_if_state(void) {
+AstNode *parse_if_state(void) {
   size_t line = current_token.line;
   check_token(TOKEN_KW_IF);
   AstNode *cond = parse_expression(&current_token);
@@ -381,7 +424,7 @@ static AstNode *parse_if_state(void) {
   if (current_token.type == TOKEN_EOL) {
     then_block = parse_block();
   } else {
-    then_block = parse_value_or_if();
+    then_block = parse_statement();
   }
   while (current_token.type == TOKEN_EOL) {
     check_token(TOKEN_EOL);
@@ -392,7 +435,7 @@ static AstNode *parse_if_state(void) {
     if (current_token.type == TOKEN_EOL) {
       else_block = parse_block();
     } else {
-      else_block = parse_value_or_if();
+      else_block = parse_statement();
     }
   }
   return ast_if(cond, then_block, else_block, line);
@@ -408,7 +451,12 @@ static AstNode *parse_while_do_state(void) {
   check_token(TOKEN_KW_WHILE);
   AstNode *cond = parse_expression(&current_token);
   check_token(TOKEN_KW_DO);
-  AstNode *block = parse_block();
+  AstNode *block = NULL;
+  if (current_token.type == TOKEN_EOL) {
+    block = parse_block();
+  } else {
+    block = parse_statement();
+  }
   return ast_while(cond, block, line);
 }
 
@@ -504,7 +552,19 @@ static AstNode *parse_params(void) {
     ast_block_add_stmt(params_block, param);
 
     if (current_token.type == TOKEN_COMMA) {
+      size_t comma_line = current_token.line;
       check_token(TOKEN_COMMA);
+      if (current_token.type == TOKEN_RPAREN) {
+        if (current_token.line > comma_line) {
+          break;
+        } else {
+          fprintf(stderr,
+                  "Syntax error: trailing comma requires newline before ')' at "
+                  "line %zu\n",
+                  current_token.line);
+          exit(ERR_SYNTAX);
+        }
+      }
     } else {
       break;
     }
