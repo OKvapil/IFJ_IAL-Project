@@ -18,6 +18,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/** @brief Size of buffers for variable names and labels. */
+#define NAME_BUF_SIZE 2048
+
 /**
  * @brief Return type of the function that is being generated.
  *
@@ -406,8 +409,8 @@ static bool gen_logic(const AstNode *node) {
     return false;
   }
 
-  char name_short[256];
-  char name_end[256];
+  char name_short[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
   int id = codegen_new_label_id();
   if (!flow_label(name_short, sizeof(name_short), id, "logic_short")) {
     return false;
@@ -579,7 +582,7 @@ static bool gen_assign(const AstNode *node) {
     return false;
   }
 
-  char name[256];
+  char name[NAME_BUF_SIZE];
   if (!var_name(name, sizeof(name), node->data.expr_assign.name,
                 node->var_id)) {
     return false;
@@ -649,7 +652,7 @@ static bool gen_var_decl(const AstNode *node) {
     codegen_int2floats();
   }
 
-  char var[256];
+  char var[NAME_BUF_SIZE];
   if (!var_name(var, sizeof(var), name, node->var_id)) {
     return false;
   }
@@ -678,7 +681,7 @@ static bool gen_def_vars(const AstNode *node) {
   switch (node->kind) {
   case AST_VAR:
   case AST_VAL: {
-    char name[256];
+    char name[NAME_BUF_SIZE];
     if (!var_name(name, sizeof(name), node->data.var_dec.name, node->var_id)) {
       return false;
     }
@@ -745,9 +748,9 @@ static bool gen_def_vars(const AstNode *node) {
   case AST_RETURN:
     return gen_def_vars(node->data.return_state.expression);
   case AST_FOR: {
-    char name_var[256];
-    char name_end[256];
-    char name_step[256];
+    char name_var[NAME_BUF_SIZE];
+    char name_end[NAME_BUF_SIZE];
+    char name_step[NAME_BUF_SIZE];
     if (!var_name(name_var, sizeof(name_var), node->data.for_state.var_name,
                   node->var_id)) {
       return false;
@@ -854,7 +857,7 @@ static bool gen_function(const AstNode *node) {
 
   current_return_type = node->data.func_def.return_type;
 
-  char label[256];
+  char label[NAME_BUF_SIZE];
   if (!fn_label(label, sizeof(label), name)) {
     return false;
   }
@@ -872,7 +875,7 @@ static bool gen_function(const AstNode *node) {
     return false;
   }
 
-  char var[256];
+  char var[NAME_BUF_SIZE];
   for (size_t i = param_count; i > 0; i--) {
     if (!var_name(var, sizeof(var), params[i - 1]->data.var_dec.name,
                   params[i - 1]->var_id)) {
@@ -977,7 +980,7 @@ static bool gen_call(const AstNode *node) {
     return gen_builtin(name, args, arg_count);
   }
 
-  char label[256];
+  char label[NAME_BUF_SIZE];
   if (!fn_label(label, sizeof(label), name)) {
     return false;
   }
@@ -990,14 +993,16 @@ static bool gen_call(const AstNode *node) {
  * @brief Generates the value of one branch of an if expression (CONTROL).
  *
  * A block branch generates all statements but the last one, and the last
- * one, which must be an expression, gives the value. A one-line branch is
- * the expression itself. The value is converted from Int to Double if the
+ * one gives the value. A block ending with return needs no value. A block
+ * ending with an if statement, or any statement in a Unit if expression,
+ * gives () (after a return it is never reached). A one-line branch is the
+ * expression itself. The value is converted from Int to Double if the
  * whole if expression is Double, and is left on the data stack.
  *
  * @param branch Then or else branch (AST_BLOCK or an expression).
  * @param result_type Result type of the whole if expression.
- * @return true on success, false on NULL, an empty block, a block that does
- *         not end with an expression or an invalid expression.
+ * @return true on success, false on NULL, an empty block, a block without
+ *         a value in a non-Unit if expression or an invalid expression.
  */
 static bool gen_branch_value(const AstNode *branch, DataType result_type) {
   if (branch == NULL) {
@@ -1024,7 +1029,14 @@ static bool gen_branch_value(const AstNode *branch, DataType result_type) {
       return gen_statement(value);
     }
     if (!is_expr_node(value)) {
-      return false;
+      if (value->kind != AST_IF && result_type != TYPE_UNIT) {
+        return false;
+      }
+      if (!gen_statement(value)) {
+        return false;
+      }
+      codegen_pushs("nil@nil");
+      return true;
     }
   } else {
     value = branch;
@@ -1043,19 +1055,20 @@ static bool gen_branch_value(const AstNode *branch, DataType result_type) {
  * @brief Generates an if used as an expression (CONTROL).
  *
  * Same jumps as gen_if, but each branch leaves its value on the data stack
- * (gen_branch_value), so the whole if leaves exactly one value. The else
- * branch is required.
+ * (gen_branch_value), so the whole if leaves exactly one value. Without
+ * else (Unit if) the missing branch gives ().
  *
- * @param node AST_IF node with a result type other than Unit.
- * @return true on success, false on an invalid node or a missing else.
+ * @param node AST_IF node used as a value.
+ * @return true on success, false on an invalid node.
  */
 static bool gen_if_expr(const AstNode *node) {
-  if (node == NULL || node->data.if_state.else_block == NULL) {
+  if (node == NULL || (node->data.if_state.else_block == NULL &&
+                       node->result_type != TYPE_UNIT)) {
     return false;
   }
 
-  char name_else[256];
-  char name_end[256];
+  char name_else[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
   int id = codegen_new_label_id();
 
   if (!flow_label(name_else, sizeof(name_else), id, "ifx_else")) {
@@ -1077,7 +1090,10 @@ static bool gen_if_expr(const AstNode *node) {
   codegen_jump(name_end);
   codegen_label(name_else);
 
-  if (!gen_branch_value(node->data.if_state.else_block, node->result_type)) {
+  if (node->data.if_state.else_block == NULL) {
+    codegen_pushs("nil@nil");
+  } else if (!gen_branch_value(node->data.if_state.else_block,
+                               node->result_type)) {
     return false;
   }
   codegen_label(name_end);
@@ -1119,7 +1135,7 @@ bool gen_expr(const AstNode *node) {
     return true;
   }
   case AST_IDENTIFIER: {
-    char name[256];
+    char name[NAME_BUF_SIZE];
     if (!var_name(name, sizeof(name), node->data.text, node->var_id)) {
       return false;
     }
@@ -1157,10 +1173,10 @@ bool gen_expr(const AstNode *node) {
  * The start, the end and the step are evaluated once before the loop and
  * stored in the control variable, LF@$for_end$<id> and LF@$for_step$<id>.
  * A step given by "by" is checked at runtime and a zero step ends the
- * program with EXIT 40. With until the loop runs while i < end; with to
- * the direction depends on the sign of the step (i <= end, or i >= end for
- * a negative step). A false guard skips the body but the step is still
- * added.
+ * program with EXIT 40. The direction depends on the sign of the step:
+ * up the loop runs while i <= end (to) or i < end (until), down while
+ * i >= end (to) or i > end (until). A false guard skips the body but the
+ * step is still added.
  *
  * @param node AST_FOR node.
  * @return true on success, false on an invalid node, guard or body.
@@ -1173,9 +1189,9 @@ static bool gen_for(const AstNode *node) {
     return false;
   }
 
-  char name_var[256];
-  char name_end[256];
-  char name_step[256];
+  char name_var[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
+  char name_step[NAME_BUF_SIZE];
   if (!var_name(name_var, sizeof(name_var), node->data.for_state.var_name,
                 node->var_id)) {
     return false;
@@ -1187,11 +1203,11 @@ static bool gen_for(const AstNode *node) {
     return false;
   }
 
-  char label_loop[256];
-  char label_down[256];
-  char label_body[256];
-  char label_next[256];
-  char label_end[256];
+  char label_loop[NAME_BUF_SIZE];
+  char label_down[NAME_BUF_SIZE];
+  char label_body[NAME_BUF_SIZE];
+  char label_next[NAME_BUF_SIZE];
+  char label_end[NAME_BUF_SIZE];
   int id = codegen_new_label_id();
 
   if (!flow_label(label_loop, sizeof(label_loop), id, "for_loop")) {
@@ -1235,33 +1251,36 @@ static bool gen_for(const AstNode *node) {
   }
   codegen_label(label_loop);
 
+  codegen_pushs(name_step);
+  codegen_pushs("int@0");
+  codegen_lts();
+  codegen_pushs("bool@true");
+  codegen_jumpifeqs(label_down);
+
+  codegen_pushs(name_var);
+  codegen_pushs(name_end);
   if (node->data.for_state.until) {
-    codegen_pushs(name_var);
-    codegen_pushs(name_end);
     codegen_lts();
     codegen_pushs("bool@false");
-    codegen_jumpifeqs(label_end);
   } else {
-    codegen_pushs(name_step);
-    codegen_pushs("int@0");
-    codegen_lts();
-    codegen_pushs("bool@true");
-    codegen_jumpifeqs(label_down);
-
-    codegen_pushs(name_var);
-    codegen_pushs(name_end);
     codegen_gts();
     codegen_pushs("bool@true");
-    codegen_jumpifeqs(label_end);
-    codegen_jump(label_body);
+  }
+  codegen_jumpifeqs(label_end);
+  codegen_jump(label_body);
 
-    codegen_label(label_down);
-    codegen_pushs(name_var);
-    codegen_pushs(name_end);
+  codegen_label(label_down);
+  codegen_pushs(name_var);
+  codegen_pushs(name_end);
+  if (node->data.for_state.until) {
+    codegen_gts();
+    codegen_pushs("bool@false");
+  } else {
     codegen_lts();
     codegen_pushs("bool@true");
-    codegen_jumpifeqs(label_end);
   }
+  codegen_jumpifeqs(label_end);
+
   codegen_label(label_body);
 
   for (size_t i = 0; i < node->data.for_state.guard_count; i++) {
@@ -1300,8 +1319,8 @@ static bool gen_while(const AstNode *node) {
   if (node == NULL) {
     return false;
   }
-  char name_start[256];
-  char name_end[256];
+  char name_start[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
   int id = codegen_new_label_id();
 
   if (!flow_label(name_start, sizeof(name_start), id, "while")) {
@@ -1343,8 +1362,8 @@ static bool gen_if(const AstNode *node) {
     return false;
   }
 
-  char name_else[256];
-  char name_end[256];
+  char name_else[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
   int id = codegen_new_label_id();
 
   if (!flow_label(name_else, sizeof(name_else), id, "else")) {
@@ -1420,7 +1439,7 @@ bool gen_program_start(const char *main_name) {
     return false;
   }
 
-  char label[256];
+  char label[NAME_BUF_SIZE];
   if (!fn_label(label, sizeof(label), main_name)) {
     return false;
   }
@@ -1469,6 +1488,10 @@ bool gen_program(const AstNode *root) {
 
   for (size_t i = 0; i < root->data.block.count; i++) {
     if (!gen_function(root->data.block.statements[i])) {
+      free(var_types);
+      var_types = NULL;
+      var_types_count = 0;
+      program_root = NULL;
       return false;
     }
   }
@@ -1477,5 +1500,6 @@ bool gen_program(const AstNode *root) {
   free(var_types);
   var_types = NULL;
   var_types_count = 0;
+  program_root = NULL;
   return true;
 }
