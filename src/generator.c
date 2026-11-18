@@ -1025,22 +1025,24 @@ static bool gen_branch_value(const AstNode *branch, DataType result_type) {
     }
 
     value = statements[count - 1];
-    if (value->kind == AST_RETURN) {
-      return gen_statement(value);
-    }
-    if (!is_expr_node(value)) {
-      if (value->kind != AST_IF && result_type != TYPE_UNIT) {
-        return false;
-      }
-      if (!gen_statement(value)) {
-        return false;
-      }
-      codegen_pushs("nil@nil");
-      return true;
-    }
   } else {
     value = branch;
   }
+
+  if (value->kind == AST_RETURN) {
+    return gen_statement(value);
+  }
+  if (!is_expr_node(value)) {
+    if (value->kind != AST_IF && result_type != TYPE_UNIT) {
+      return false;
+    }
+    if (!gen_statement(value)) {
+      return false;
+    }
+    codegen_pushs("nil@nil");
+    return true;
+  }
+
   if (!gen_expr(value)) {
     return false;
   }
