@@ -10,6 +10,7 @@
 #include "expressions.h"
 #include "ast.h"
 #include "errors.h"
+#include "parser.h"
 #include "scanner.h"
 #include "token.h"
 #include <stdbool.h>
@@ -74,6 +75,8 @@ static OperatorsTable token_to_index(TokenType type) {
   case TOKEN_KW_TRUE:
     return ID;
   case TOKEN_KW_FALSE:
+    return ID;
+  case TOKEN_KW_IF:
     return ID;
   case TOKEN_LT:
     return REL;
@@ -308,6 +311,10 @@ static void stack_free(Stack *s) {
 }
 
 static int move_next_token(Token *token) {
+  if (token->type != TOKEN_INDENT && token->type != TOKEN_DEDENT &&
+      token->type != TOKEN_EOL) {
+    last_token_line = token->line;
+  }
   token_clear(token);
   return scanner_get_next_token(token);
 }
@@ -323,6 +330,11 @@ static AstNode *parse_expression_impl(Token *token, AstNode *first_operand) {
     StackNode *upper = stack_top_terminal(&stack);
     OperatorsTable a = upper->operator;
     OperatorsTable b = token_to_index(token->type);
+    if (token->type == TOKEN_KW_IF &&
+        (stack.top->type == SYMBOL_NONTERMINAL ||
+         stack.top->operator== RPAREN || stack.top->operator== ID)) {
+      b = DOLLAR;
+    }
     if ((b == MINUS || b == PLUS) && stack.top->type == SYMBOL_TERMINAL &&
         stack.top->operator!= RPAREN && stack.top->operator!= ID) {
       b = UMINUS;
@@ -335,6 +347,18 @@ static AstNode *parse_expression_impl(Token *token, AstNode *first_operand) {
     case S: {
       stack_push_after_top_terminal(&stack);
       if (b == ID) {
+        if (token->type == TOKEN_KW_IF) {
+          AstNode *leaf = parse_if_state();
+          if (leaf == NULL) {
+            err_state(NULL, NULL, &stack, ERR_INTERNAL);
+          }
+          if (token != &current_token) {
+            *token = current_token;
+          }
+          push_stack(&stack, SYMBOL_TERMINAL, b, TOKEN_KW_IF, leaf->line, leaf);
+          break;
+        }
+
         AstNode *leaf = NULL;
         Token id_tok = *token;
         token->attr.str_val = NULL;
@@ -344,7 +368,6 @@ static AstNode *parse_expression_impl(Token *token, AstNode *first_operand) {
         }
 
         if (id_tok.type == TOKEN_IDENTIFIER && token->type == TOKEN_LPAREN) {
-
           if (move_next_token(token) != ERR_OK) {
             err_state(&id_tok, NULL, &stack, ERR_LEXICAL);
           }
@@ -356,8 +379,20 @@ static AstNode *parse_expression_impl(Token *token, AstNode *first_operand) {
               ast_block_add_stmt(args_block, arg);
               if (token->type != TOKEN_COMMA)
                 break;
+              size_t comma_line = token->line;
               if (move_next_token(token) != ERR_OK)
                 err_state(&id_tok, args_block, &stack, ERR_LEXICAL);
+              if (token->type == TOKEN_RPAREN) {
+                if (token->line > comma_line) {
+                  break;
+                } else {
+                  fprintf(stderr,
+                          "Syntax error: trailing comma requires newline "
+                          "before ')' at line %zu\n",
+                          token->line);
+                  err_state(&id_tok, args_block, &stack, ERR_SYNTAX);
+                }
+              }
             }
           }
           if (token->type != TOKEN_RPAREN) {
