@@ -106,6 +106,20 @@ static void scanner_buffer_free(scanner_buffer_t *buf) {
   buf->capacity = 0;
 }
 
+/* ============================================================================
+ * Authorship Note:
+ * The following data structure `indent_stack_t` and its static utility
+ * functions were designed with the assistance of AI (Google Gemini 3.1 Pro)
+ * based on the following prompt:
+ *
+ * "V jazyce C navrhni strukturu zásobníku pro sledování úrovní odsazení
+ * v lexikálním analyzátoru jazyka IFJ26 a doplň k němu základní pomocné
+ * funkce (inicializace se základní úrovní 0, vložení nové úrovně na vrchol
+ * s ošetřením přetečení kapacity ukončením s kódem ERR_INTERNAL, odebrání
+ * vrcholu a nahlédnutí na aktuální úroveň odsazení)."
+ * ============================================================================
+ */
+
 // ---------- indentation stack struct
 typedef struct {
   size_t indentation[128];
@@ -1174,7 +1188,25 @@ int scanner_get_next_token(Token *token) {
         // same indentation
         at_line_start = false;
       } else if (at_line_start && bracket_depth > 0) {
-        // inside brackets, indentation is ignored
+        
+        //tab cannot be counted as indentation
+        if (has_tab) {
+          return ERR_LEXICAL;
+        }
+
+        size_t logical_line_indent = top_peek(&s_stack);
+
+        // Inside parentheses, continuation lines must be indented more than
+        // the start of the logical line (closing ')' may align with it)
+        if (c == ')') {
+          if (space_count < logical_line_indent) {
+            return ERR_LEXICAL;
+          }
+        } else {
+          if (space_count <= logical_line_indent) {
+            return ERR_LEXICAL;
+          }
+        }
         at_line_start = false;
       }
 
