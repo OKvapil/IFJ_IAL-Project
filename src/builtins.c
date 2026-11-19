@@ -63,6 +63,7 @@ void builtin_tostr(const char *result, const char *source, DataType type) {
     codegen_move(result, "string@()");
     break;
   case TYPE_UNKNOWN:
+  case TYPE_ANY:
     break;
   case TYPE_BOOL: {
     int id = codegen_new_label_id();

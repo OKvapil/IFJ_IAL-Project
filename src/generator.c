@@ -1,0 +1,1507 @@
+/**
+ * @file generator.c
+ * @brief Generates IFJcode26 from the abstract syntax tree (implementation)
+ *
+ * IFJ/IAL project - IFJ26 compiler
+ *
+ * @author Ondřej Kvapil (xkvapio00)
+ *
+ * Doxygen comments AI-generated (Claude). Prompt: "Vygeneruj mi doxygen
+ * komentare k tomuto souboru"
+ */
+
+#include "generator.h"
+#include "builtins.h"
+#include "codegen.h"
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/** @brief Size of buffers for variable names and labels. */
+#define NAME_BUF_SIZE 2048
+
+/**
+ * @brief Return type of the function that is being generated.
+ *
+ * Set by gen_function at the start of every function and read by
+ * gen_return_value to convert or drop the returned value.
+ */
+static DataType current_return_type = TYPE_UNKNOWN;
+
+/**
+ * @brief Root of the program being generated (block of function
+ *        definitions).
+ *
+ * Set by gen_program and used by find_function to look up the parameter
+ * types of a called function.
+ */
+static const AstNode *program_root = NULL;
+
+/** @brief Type of every variable, indexed by var_id (filled by gen_def_vars).
+ */
+static DataType *var_types = NULL;
+
+/** @brief Number of items allocated in var_types. */
+static size_t var_types_count = 0;
+
+/** @brief Names of the IFJ26 built-in functions, used by is_builtin. */
+static const char *const builtin_names[] = {
+    "print",     "readLine", "readInt", "readDouble", "toStr",       "toInt",
+    "strLength", "subStr",   "ord",     "chr",        "readBoolean",
+};
+
+/**
+ * @brief Decides if a value must be converted from Int to Double.
+ *
+ * @param type1 Type of the value that may need the conversion.
+ * @param type2 Type of the other operand (or of the target).
+ * @return true if type1 is Int and type2 is Double.
+ */
+static bool needs_int2float(DataType type1, DataType type2) {
+  if (type1 == TYPE_INT && type2 == TYPE_DOUBLE) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Checks if a node is an expression (it leaves a value on the stack).
+ *
+ * Literals, identifiers, unary and binary operations and function calls are
+ * expressions. An if is an expression only if semantic analysis gave it a
+ * result type other than Unit (CONTROL). Used to recognize an expression
+ * used as a statement and the implicit return value of a function.
+ *
+ * @param node Node to check (may be NULL).
+ * @return true if the node is an expression, false otherwise or for NULL.
+ */
+static bool is_expr_node(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  switch (node->kind) {
+  case AST_INT_LIT:
+  case AST_DOUBLE_LIT:
+  case AST_STRING_LIT:
+  case AST_IDENTIFIER:
+  case AST_BINARY:
+  case AST_UNARY:
+  case AST_FUNC_CALL:
+  case AST_BOOL_LIT:
+  case AST_UNIT_LIT:
+    return true;
+  case AST_IF:
+    return node->result_type != TYPE_UNKNOWN && node->result_type != TYPE_UNIT;
+  default:
+    return false;
+  }
+}
+
+/**
+ * @brief Checks if a function name belongs to an IFJ26 built-in function.
+ *
+ * @param name Function name (may be NULL).
+ * @return true if the name is one of builtin_names.
+ */
+static bool is_builtin(const char *name) {
+  if (name == NULL) {
+    return false;
+  }
+
+  size_t count = sizeof(builtin_names) / sizeof(builtin_names[0]);
+  for (size_t i = 0; i < count; i++) {
+    if (strcmp(name, builtin_names[i]) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** @brief Finds the definition of a user function by its name.
+ *
+ * @param name Function name (may be NULL).
+ * @return The AST_FUNC_DEF node, or NULL if there is no such function or
+ *         gen_program has not set program_root.
+ */
+static const AstNode *find_function(const char *name) {
+  if (name == NULL || program_root == NULL) {
+    return NULL;
+  }
+  for (size_t i = 0; i < program_root->data.block.count; i++) {
+    const AstNode *func = program_root->data.block.statements[i];
+    if (func != NULL && func->kind == AST_FUNC_DEF &&
+        func->data.func_def.name != NULL &&
+        strcmp(name, func->data.func_def.name) == 0) {
+      return func;
+    }
+  }
+  return NULL;
+}
+
+/**
+ * @brief Remembers the type of a variable for gen_assign.
+ *
+ * @param var_id Unique id of the variable.
+ * @param type Type of the variable.
+ * @return true on success, false for a negative id or an allocation failure.
+ */
+static bool set_var_type(int var_id, DataType type) {
+  if (var_id < 0) {
+    return false;
+  }
+
+  size_t idx = (size_t)var_id;
+
+  if (idx >= var_types_count) {
+    size_t new_size = var_types_count == 0 ? 64 : var_types_count;
+    while (new_size <= idx) {
+      new_size *= 2;
+    }
+
+    DataType *tmp = realloc(var_types, new_size * sizeof(DataType));
+    if (tmp == NULL) {
+      return false;
+    }
+
+    for (size_t jdx = var_types_count; jdx < new_size; jdx++) {
+      tmp[jdx] = TYPE_UNKNOWN;
+    }
+    var_types = tmp;
+    var_types_count = new_size;
+  }
+  var_types[idx] = type;
+
+  return true;
+}
+
+/**
+ * @brief Returns the type of a variable remembered by set_var_type.
+ *
+ * @param var_id Unique id of the variable.
+ * @return The type, or TYPE_UNKNOWN if it is not known.
+ */
+static DataType get_var_type(int var_id) {
+  if (var_id < 0 || (size_t)var_id >= var_types_count) {
+    return TYPE_UNKNOWN;
+  }
+  return var_types[var_id];
+}
+
+/**
+ * @brief Generates a call of a built-in function.
+ *
+ * The arguments are already on the data stack (generated by gen_call).
+ * Functions with one argument pop it into GF@$arg, generate the built-in
+ * and push the result from GF@$res (print pushes nil@nil, it returns Unit).
+ * Read functions have no argument. subStr and ord are subroutines in
+ * IFJcode26 that take their arguments from the stack, so only CALL is
+ * generated. The result is left on the data stack.
+ *
+ * @param name Name of the built-in function.
+ * @param args Argument nodes (used for their types).
+ * @param arg_count Number of arguments.
+ * @return true on success, false for an unknown name or wrong argument count.
+ */
+static bool gen_builtin(const char *name, AstNode **args, size_t arg_count) {
+  if (name == NULL) {
+    return false;
+  }
+
+  if (strcmp(name, "print") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    codegen_pops("GF@$arg");
+    builtin_print("GF@$arg", args[0]->result_type);
+    codegen_pushs("nil@nil");
+    return true;
+  }
+
+  if (strcmp(name, "readLine") == 0) {
+    if (arg_count != 0) {
+      return false;
+    }
+    builtin_readline("GF@$res");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "readInt") == 0) {
+    if (arg_count != 0) {
+      return false;
+    }
+    builtin_readint("GF@$res");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "readDouble") == 0) {
+    if (arg_count != 0) {
+      return false;
+    }
+    builtin_readdouble("GF@$res");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "toStr") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    codegen_pops("GF@$arg");
+    builtin_tostr("GF@$res", "GF@$arg", args[0]->result_type);
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "toInt") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    if (args[0]->result_type == TYPE_INT) {
+      codegen_int2floats();
+    }
+
+    codegen_pops("GF@$arg");
+    builtin_toint("GF@$res", "GF@$arg");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "strLength") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    codegen_pops("GF@$arg");
+    builtin_strlength("GF@$res", "GF@$arg");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "chr") == 0) {
+    if (arg_count != 1) {
+      return false;
+    }
+    codegen_pops("GF@$arg");
+    builtin_chr("GF@$res", "GF@$arg");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+
+  if (strcmp(name, "subStr") == 0) {
+    if (arg_count != 3) {
+      return false;
+    }
+    codegen_call("$builtin_substr");
+    return true;
+  }
+
+  if (strcmp(name, "ord") == 0) {
+    if (arg_count != 2) {
+      return false;
+    }
+    codegen_call("$builtin_ord");
+    return true;
+  }
+
+  if (strcmp(name, "readBoolean") == 0) {
+    if (arg_count != 0) {
+      return false;
+    }
+    builtin_readbool("GF@$res");
+    codegen_pushs("GF@$res");
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Builds the label of a user function: $fn_<name>.
+ *
+ * @param buff Output buffer.
+ * @param size Size of the output buffer.
+ * @param name Function name.
+ * @return true on success, false if name is NULL or the buffer is too small.
+ */
+static bool fn_label(char *buff, size_t size, const char *name) {
+  if (name == NULL) {
+    return false;
+  }
+
+  int len = snprintf(buff, size, "$fn_%s", name);
+  if (len < 0 || (size_t)len >= size) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @brief Builds the name of a local variable: LF@<name>$<var_id>.
+ *
+ * The unique var_id (from semantic analysis) keeps variables with the same
+ * name in different blocks apart.
+ *
+ * @param buff Output buffer.
+ * @param size Size of the output buffer.
+ * @param name Variable name in the source program.
+ * @param var_id Unique id of the variable.
+ * @return true on success, false if name is NULL, var_id is negative (not
+ *         filled in) or the buffer is too small.
+ */
+static bool var_name(char *buff, size_t size, const char *name, int var_id) {
+  if (name == NULL || var_id < 0) {
+    return false;
+  }
+
+  int len = snprintf(buff, size, "LF@%s$%d", name, var_id);
+  if (len < 0 || (size_t)len >= size) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @brief Builds a control flow label: $L<id>_<kind>.
+ *
+ * @param buff Output buffer.
+ * @param size Size of the output buffer.
+ * @param id Label id from codegen_new_label_id, one per construct.
+ * @param kind Label kind, e.g. "while", "while_end", "else", "if_end".
+ * @return true on success, false if kind is NULL or the buffer is too small.
+ */
+static bool flow_label(char *buff, size_t size, int id, const char *kind) {
+  if (kind == NULL) {
+    return false;
+  }
+
+  int len = snprintf(buff, size, "$L%d_%s", id, kind);
+  if (len < 0 || (size_t)len >= size) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @brief Generates && and || with short-circuit evaluation (BOOLTHEN).
+ *
+ * The left operand is compared with the value that decides the result on
+ * its own (false for &&, true for ||). If it matches, the right operand is
+ * skipped and that value is the result; otherwise the result is the right
+ * operand. Exactly one value is left on the data stack.
+ *
+ * @param node AST_BINARY node with TOKEN_AND or TOKEN_OR.
+ * @return true on success, false on an invalid node or operator.
+ */
+static bool gen_logic(const AstNode *node) {
+  if (node == NULL || node->data.binary.left == NULL ||
+      node->data.binary.right == NULL) {
+    return false;
+  }
+
+  const char *short_value;
+  if (node->data.binary.op == TOKEN_AND) {
+    short_value = "bool@false";
+  } else if (node->data.binary.op == TOKEN_OR) {
+    short_value = "bool@true";
+  } else {
+    return false;
+  }
+
+  char name_short[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
+  int id = codegen_new_label_id();
+  if (!flow_label(name_short, sizeof(name_short), id, "logic_short")) {
+    return false;
+  }
+  if (!flow_label(name_end, sizeof(name_end), id, "logic_end")) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.binary.left)) {
+    return false;
+  }
+  codegen_pushs(short_value);
+  codegen_jumpifeqs(name_short);
+
+  if (!gen_expr(node->data.binary.right)) {
+    return false;
+  }
+  codegen_jump(name_end);
+  codegen_label(name_short);
+  codegen_pushs(short_value);
+  codegen_label(name_end);
+
+  return true;
+}
+
+/**
+ * @brief Generates a binary operation using the data stack.
+ *
+ * Both operands are pushed (left first) and converted from Int to Double
+ * when needed. Int division converts both operands to Double, divides and
+ * converts back (rounds toward zero). String + uses CONCAT through
+ * GF@$concat_l and GF@$concat_r. <=, >= and != are made with NOTS.
+ * && and || are handed over to gen_logic before the operands are generated.
+ *
+ * @param node AST_BINARY node.
+ * @return true on success, false on an invalid node or operator.
+ */
+static bool gen_binary(const AstNode *node) {
+  if (node == NULL || node->data.binary.left == NULL ||
+      node->data.binary.right == NULL) {
+    return false;
+  }
+
+  if (node->data.binary.op == TOKEN_AND || node->data.binary.op == TOKEN_OR) {
+    return gen_logic(node);
+  }
+
+  bool int_div =
+      node->data.binary.op == TOKEN_DIV && node->result_type == TYPE_INT;
+
+  if (!gen_expr(node->data.binary.left)) {
+    return false;
+  }
+  if (int_div || needs_int2float(node->data.binary.left->result_type,
+                                 node->data.binary.right->result_type)) {
+    codegen_int2floats();
+  }
+
+  if (!gen_expr(node->data.binary.right)) {
+    return false;
+  }
+  if (int_div || needs_int2float(node->data.binary.right->result_type,
+                                 node->data.binary.left->result_type)) {
+    codegen_int2floats();
+  }
+
+  switch (node->data.binary.op) {
+  case TOKEN_PLUS:
+    if (node->result_type == TYPE_STRING) {
+      codegen_pops("GF@$concat_r");
+      codegen_pops("GF@$concat_l");
+      codegen_concat("GF@$concat_l", "GF@$concat_l", "GF@$concat_r");
+      codegen_pushs("GF@$concat_l");
+    } else {
+      codegen_adds();
+    }
+    break;
+  case TOKEN_MINUS:
+    codegen_subs();
+    break;
+  case TOKEN_MUL:
+    codegen_muls();
+    break;
+  case TOKEN_DIV:
+    codegen_divs();
+    if (int_div) {
+      codegen_float2ints();
+    }
+    break;
+  case TOKEN_LT:
+    codegen_lts();
+    break;
+  case TOKEN_GT:
+    codegen_gts();
+    break;
+  case TOKEN_EQ:
+    codegen_eqs();
+    break;
+  case TOKEN_NEQ:
+    codegen_eqs();
+    codegen_nots();
+    break;
+  case TOKEN_LTE:
+    codegen_gts();
+    codegen_nots();
+    break;
+  case TOKEN_GTE:
+    codegen_lts();
+    codegen_nots();
+    break;
+  default:
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @brief Generates a unary operation using the data stack.
+ *
+ * Unary minus multiplies by -1 (Int) or -1.0 (Double), which keeps -0.0
+ * for Double. Unary plus does nothing. Logical negation ! uses NOTS.
+ *
+ * @param node AST_UNARY node.
+ * @return true on success, false on an invalid node, operator or type.
+ */
+static bool gen_unary(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.unary.operand)) {
+    return false;
+  }
+
+  switch (node->data.unary.op) {
+  case TOKEN_PLUS:
+    break;
+  case TOKEN_MINUS:
+    if (node->result_type == TYPE_INT) {
+      codegen_pushs("int@-1");
+    } else if (node->result_type == TYPE_DOUBLE) {
+      codegen_pushs("float@-0x1p+0");
+    } else {
+      return false;
+    }
+    codegen_muls();
+    break;
+  case TOKEN_NOT:
+    codegen_nots();
+    break;
+  default:
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @brief Generates an assignment: evaluates the value and pops it into the
+ *        variable.
+ *
+ * The value is converted from Int to Double if the variable is Double
+ * (its type is remembered by gen_def_vars, the node itself has type Unit).
+ *
+ * @param node AST_ASSIGN node.
+ * @return true on success, false on an invalid node.
+ */
+static bool gen_assign(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  char name[NAME_BUF_SIZE];
+  if (!var_name(name, sizeof(name), node->data.expr_assign.name,
+                node->var_id)) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.expr_assign.value)) {
+    return false;
+  }
+
+  if (needs_int2float(node->data.expr_assign.value->result_type,
+                      get_var_type(node->var_id))) {
+    codegen_int2floats();
+  }
+
+  codegen_pops(name);
+  return true;
+}
+
+/**
+ * @brief Generates all statements of a block one by one.
+ *
+ * Emits no instruction of its own and creates no frame.
+ *
+ * @param node AST_BLOCK node.
+ * @return true on success, false if any statement fails.
+ */
+static bool gen_block(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  for (size_t i = 0; i < node->data.block.count; i++) {
+    if (!gen_statement(node->data.block.statements[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @brief Generates a val/var declaration: evaluates the initializer and
+ *        stores it into the variable.
+ *
+ * DEFVAR is not generated here but at the start of the function
+ * (gen_def_vars), so a declaration inside a loop is not defined twice.
+ *
+ * @param node AST_VAL or AST_VAR node.
+ * @return true on success, false on an invalid node.
+ */
+static bool gen_var_decl(const AstNode *node) {
+  if (node == NULL || (node->kind != AST_VAL && node->kind != AST_VAR)) {
+    return false;
+  }
+
+  const char *name = node->data.var_dec.name;
+  const AstNode *value = node->data.var_dec.init_expr;
+  if (name == NULL || value == NULL) {
+    return false;
+  }
+
+  if (!gen_expr(value)) {
+    return false;
+  }
+
+  if (node->data.var_dec.var_type == TYPE_DOUBLE &&
+      value->result_type == TYPE_INT) {
+    codegen_int2floats();
+  }
+
+  char var[NAME_BUF_SIZE];
+  if (!var_name(var, sizeof(var), name, node->var_id)) {
+    return false;
+  }
+  codegen_pops(var);
+  return true;
+}
+
+/**
+ * @brief Generates DEFVAR for every val/var found in a subtree.
+ *
+ * Walks the whole subtree: blocks, if and while (conditions too), for loops
+ * (control variable, end and step, then the bounds, guards and body), and
+ * also expressions (declaration initializers, assignments, returns,
+ * operands, call arguments), because an if expression can hide a block
+ * with a declaration inside an expression. Every declaration is defined
+ * once at the start of the function.
+ *
+ * @param node Subtree to search (NULL is allowed, e.g. a missing else).
+ * @return true on success, false if a variable name cannot be built.
+ */
+static bool gen_def_vars(const AstNode *node) {
+  if (node == NULL) {
+    return true;
+  }
+
+  switch (node->kind) {
+  case AST_VAR:
+  case AST_VAL: {
+    char name[NAME_BUF_SIZE];
+    if (!var_name(name, sizeof(name), node->data.var_dec.name, node->var_id)) {
+      return false;
+    }
+    codegen_defvar(name);
+    if (!set_var_type(node->var_id, node->data.var_dec.var_type)) {
+      return false;
+    }
+    return gen_def_vars(node->data.var_dec.init_expr);
+  }
+
+  case AST_BLOCK:
+    for (size_t i = 0; i < node->data.block.count; i++) {
+      if (!gen_def_vars(node->data.block.statements[i])) {
+        return false;
+      }
+    }
+    return true;
+
+  case AST_IF:
+    if (!gen_def_vars(node->data.if_state.cond)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.if_state.then_block)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.if_state.else_block)) {
+      return false;
+    }
+    return true;
+
+  case AST_WHILE:
+    if (!gen_def_vars(node->data.while_state.cond)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.while_state.block)) {
+      return false;
+    }
+    return true;
+
+  case AST_UNARY:
+    return gen_def_vars(node->data.unary.operand);
+
+  case AST_BINARY:
+    if (!gen_def_vars(node->data.binary.left)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.binary.right)) {
+      return false;
+    }
+    return true;
+  case AST_FUNC_CALL:
+    if (node->data.func_call.args == NULL &&
+        node->data.func_call.arg_count > 0) {
+      return false;
+    }
+    for (size_t i = 0; i < node->data.func_call.arg_count; i++) {
+      if (!gen_def_vars(node->data.func_call.args[i])) {
+        return false;
+      }
+    }
+    return true;
+  case AST_ASSIGN:
+    return gen_def_vars(node->data.expr_assign.value);
+  case AST_RETURN:
+    return gen_def_vars(node->data.return_state.expression);
+  case AST_FOR: {
+    char name_var[NAME_BUF_SIZE];
+    char name_end[NAME_BUF_SIZE];
+    char name_step[NAME_BUF_SIZE];
+    if (!var_name(name_var, sizeof(name_var), node->data.for_state.var_name,
+                  node->var_id)) {
+      return false;
+    }
+    if (!var_name(name_end, sizeof(name_end), "$for_end", node->var_id)) {
+      return false;
+    }
+    if (!var_name(name_step, sizeof(name_step), "$for_step", node->var_id)) {
+      return false;
+    }
+    codegen_defvar(name_var);
+    codegen_defvar(name_end);
+    codegen_defvar(name_step);
+
+    if (!gen_def_vars(node->data.for_state.from)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.for_state.to)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.for_state.step)) {
+      return false;
+    }
+    if (!gen_def_vars(node->data.for_state.body)) {
+      return false;
+    }
+
+    if (node->data.for_state.guards == NULL &&
+        node->data.for_state.guard_count > 0) {
+      return false;
+    }
+    for (size_t i = 0; i < node->data.for_state.guard_count; i++) {
+      if (!gen_def_vars(node->data.for_state.guards[i])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  default:
+    return true;
+  }
+}
+
+/**
+ * @brief Generates the end of a function that returns a value.
+ *
+ * Pushes the value (nil@nil if there is none), drops it and pushes nil@nil
+ * in a Unit function, or converts Int to Double in a Double function, then
+ * generates POPFRAME and RETURN.
+ *
+ * @param expr Returned expression, or NULL for ().
+ * @return true on success, false if the expression cannot be generated.
+ */
+static bool gen_return_value(const AstNode *expr) {
+  if (expr == NULL) {
+    codegen_pushs("nil@nil");
+  } else {
+    if (!gen_expr(expr)) {
+      return false;
+    }
+    if (current_return_type == TYPE_UNIT) {
+      codegen_pops("GF@$trash");
+      codegen_pushs("nil@nil");
+    } else if (current_return_type == TYPE_DOUBLE &&
+               expr->result_type == TYPE_INT) {
+      codegen_int2floats();
+    }
+  }
+  codegen_popframe();
+  codegen_return();
+  return true;
+}
+
+/**
+ * @brief Generates a function definition.
+ *
+ * Generates the label and a new frame, DEFVAR for parameters and all local
+ * variables, pops the parameters (in reverse order, the last argument is on
+ * top of the stack) and the body. If the body is an expression, or a block
+ * ending with an expression, its value is returned; otherwise the function
+ * returns ().
+ *
+ * @param node AST_FUNC_DEF node.
+ * @return true on success, false on an invalid node or body.
+ */
+static bool gen_function(const AstNode *node) {
+  if (node == NULL || node->kind != AST_FUNC_DEF) {
+    return false;
+  }
+
+  const char *name = node->data.func_def.name;
+  AstNode **params = node->data.func_def.params;
+  size_t param_count = node->data.func_def.param_count;
+  const AstNode *body = node->data.func_def.block;
+
+  if (name == NULL || body == NULL) {
+    return false;
+  }
+  if (params == NULL && param_count > 0) {
+    return false;
+  }
+
+  current_return_type = node->data.func_def.return_type;
+
+  char label[NAME_BUF_SIZE];
+  if (!fn_label(label, sizeof(label), name)) {
+    return false;
+  }
+  codegen_label(label);
+  codegen_createframe();
+  codegen_pushframe();
+
+  for (size_t i = 0; i < param_count; i++) {
+    if (params[i] == NULL || !gen_def_vars(params[i])) {
+      return false;
+    }
+  }
+
+  if (!gen_def_vars(body)) {
+    return false;
+  }
+
+  char var[NAME_BUF_SIZE];
+  for (size_t i = param_count; i > 0; i--) {
+    if (!var_name(var, sizeof(var), params[i - 1]->data.var_dec.name,
+                  params[i - 1]->var_id)) {
+      return false;
+    }
+    codegen_pops(var);
+  }
+
+  if (body->kind != AST_BLOCK) {
+    return gen_return_value(body);
+  }
+
+  size_t count = body->data.block.count;
+  AstNode **statements = body->data.block.statements;
+  for (size_t i = 0; i + 1 < count; i++) {
+    if (!gen_statement(statements[i])) {
+      return false;
+    }
+  }
+
+  if (count > 0 && is_expr_node(statements[count - 1])) {
+    return gen_return_value(statements[count - 1]);
+  }
+
+  if (count > 0 && !gen_statement(statements[count - 1])) {
+    return false;
+  }
+  codegen_pushs("nil@nil");
+  codegen_popframe();
+  codegen_return();
+  return true;
+}
+
+/**
+ * @brief Generates a return statement.
+ *
+ * @param node AST_RETURN node (expression may be NULL).
+ * @return true on success, false on an invalid node.
+ */
+static bool gen_return(const AstNode *node) {
+  if (node == NULL || node->kind != AST_RETURN) {
+    return false;
+  }
+  return gen_return_value(node->data.return_state.expression);
+}
+
+/**
+ * @brief Generates a function call.
+ *
+ * Arguments are pushed from left to right. For a user function, an Int
+ * argument is converted to Double right after it is pushed if the
+ * parameter is Double. A built-in function is handled by gen_builtin,
+ * a user function by CALL $fn_<name>. The result is left on the data stack.
+ *
+ * @param node AST_FUNC_CALL node.
+ * @return true on success, false on an invalid node or argument, an
+ *         undefined function or a wrong number of arguments.
+ */
+static bool gen_call(const AstNode *node) {
+  if (node == NULL || node->kind != AST_FUNC_CALL) {
+    return false;
+  }
+
+  const char *name = node->data.func_call.name;
+  AstNode **args = node->data.func_call.args;
+  size_t arg_count = node->data.func_call.arg_count;
+
+  if (name == NULL) {
+    return false;
+  }
+
+  if (args == NULL && arg_count > 0) {
+    return false;
+  }
+
+  const AstNode *func = NULL;
+  if (!is_builtin(name)) {
+    func = find_function(name);
+    if (func == NULL || func->data.func_def.param_count != arg_count) {
+      return false;
+    }
+  }
+
+  for (size_t i = 0; i < arg_count; i++) {
+    if (args[i] == NULL) {
+      return false;
+    }
+    if (!gen_expr(args[i])) {
+      return false;
+    }
+
+    if (func != NULL) {
+      const AstNode *param = func->data.func_def.params[i];
+      if (param != NULL && param->data.var_dec.var_type == TYPE_DOUBLE &&
+          args[i]->result_type == TYPE_INT) {
+        codegen_int2floats();
+      }
+    }
+  }
+
+  if (is_builtin(name)) {
+    return gen_builtin(name, args, arg_count);
+  }
+
+  char label[NAME_BUF_SIZE];
+  if (!fn_label(label, sizeof(label), name)) {
+    return false;
+  }
+  codegen_call(label);
+
+  return true;
+}
+
+/**
+ * @brief Generates the value of one branch of an if expression (CONTROL).
+ *
+ * A block branch generates all statements but the last one, and the last
+ * one gives the value. A block ending with return needs no value. A block
+ * ending with an if statement, or any statement in a Unit if expression,
+ * gives () (after a return it is never reached). A one-line branch is the
+ * expression itself. The value is converted from Int to Double if the
+ * whole if expression is Double, and is left on the data stack.
+ *
+ * @param branch Then or else branch (AST_BLOCK or an expression).
+ * @param result_type Result type of the whole if expression.
+ * @return true on success, false on NULL, an empty block, a block without
+ *         a value in a non-Unit if expression or an invalid expression.
+ */
+static bool gen_branch_value(const AstNode *branch, DataType result_type) {
+  if (branch == NULL) {
+    return false;
+  }
+
+  const AstNode *value = NULL;
+  if (branch->kind == AST_BLOCK) {
+    size_t count = branch->data.block.count;
+    AstNode **statements = branch->data.block.statements;
+
+    if (count == 0) {
+      return false;
+    }
+
+    for (size_t i = 0; i + 1 < count; i++) {
+      if (!gen_statement(statements[i])) {
+        return false;
+      }
+    }
+
+    value = statements[count - 1];
+  } else {
+    value = branch;
+  }
+
+  if (value->kind == AST_RETURN) {
+    return gen_statement(value);
+  }
+  if (!is_expr_node(value)) {
+    if (value->kind != AST_IF && result_type != TYPE_UNIT) {
+      return false;
+    }
+    if (!gen_statement(value)) {
+      return false;
+    }
+    codegen_pushs("nil@nil");
+    return true;
+  }
+
+  if (!gen_expr(value)) {
+    return false;
+  }
+
+  if (result_type == TYPE_DOUBLE && value->result_type == TYPE_INT) {
+    codegen_int2floats();
+  }
+  return true;
+}
+
+/**
+ * @brief Generates an if used as an expression (CONTROL).
+ *
+ * Same jumps as gen_if, but each branch leaves its value on the data stack
+ * (gen_branch_value), so the whole if leaves exactly one value. Without
+ * else (Unit if) the missing branch gives ().
+ *
+ * @param node AST_IF node used as a value.
+ * @return true on success, false on an invalid node.
+ */
+static bool gen_if_expr(const AstNode *node) {
+  if (node == NULL || (node->data.if_state.else_block == NULL &&
+                       node->result_type != TYPE_UNIT)) {
+    return false;
+  }
+
+  char name_else[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
+  int id = codegen_new_label_id();
+
+  if (!flow_label(name_else, sizeof(name_else), id, "ifx_else")) {
+    return false;
+  }
+  if (!flow_label(name_end, sizeof(name_end), id, "ifx_end")) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.if_state.cond)) {
+    return false;
+  }
+  codegen_pushs("bool@false");
+  codegen_jumpifeqs(name_else);
+
+  if (!gen_branch_value(node->data.if_state.then_block, node->result_type)) {
+    return false;
+  }
+  codegen_jump(name_end);
+  codegen_label(name_else);
+
+  if (node->data.if_state.else_block == NULL) {
+    codegen_pushs("nil@nil");
+  } else if (!gen_branch_value(node->data.if_state.else_block,
+                               node->result_type)) {
+    return false;
+  }
+  codegen_label(name_end);
+
+  return true;
+}
+
+bool gen_expr(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  switch (node->kind) {
+  case AST_INT_LIT: {
+    char *op = codegen_const_int(node->data.int_value);
+    if (op == NULL) {
+      return false;
+    }
+    codegen_pushs(op);
+    free(op);
+    return true;
+  }
+  case AST_DOUBLE_LIT: {
+    char *op = codegen_const_float(node->data.float_value);
+    if (op == NULL) {
+      return false;
+    }
+    codegen_pushs(op);
+    free(op);
+    return true;
+  }
+  case AST_STRING_LIT: {
+    char *op = codegen_const_string(node->data.text);
+    if (op == NULL) {
+      return false;
+    }
+    codegen_pushs(op);
+    free(op);
+    return true;
+  }
+  case AST_IDENTIFIER: {
+    char name[NAME_BUF_SIZE];
+    if (!var_name(name, sizeof(name), node->data.text, node->var_id)) {
+      return false;
+    }
+    codegen_pushs(name);
+    return true;
+  }
+  case AST_BINARY:
+    return gen_binary(node);
+  case AST_UNARY:
+    return gen_unary(node);
+  case AST_FUNC_CALL:
+    return gen_call(node);
+  case AST_BOOL_LIT: {
+    char *op = codegen_const_bool(node->data.bool_value);
+    if (op == NULL) {
+      return false;
+    }
+    codegen_pushs(op);
+    free(op);
+    return true;
+  }
+  case AST_IF:
+    return gen_if_expr(node);
+  case AST_UNIT_LIT:
+    codegen_pushs("nil@nil");
+    return true;
+  default:
+    return false;
+  }
+}
+
+/**
+ * @brief Generates a for loop (CONTROL).
+ *
+ * The start, the end and the step are evaluated once before the loop and
+ * stored in the control variable, LF@$for_end$<id> and LF@$for_step$<id>.
+ * A step given by "by" is checked at runtime and a zero step ends the
+ * program with EXIT 40. The direction depends on the sign of the step:
+ * up the loop runs while i <= end (to) or i < end (until), down while
+ * i >= end (to) or i > end (until). A false guard skips the body but the
+ * step is still added.
+ *
+ * @param node AST_FOR node.
+ * @return true on success, false on an invalid node, guard or body.
+ */
+static bool gen_for(const AstNode *node) {
+  if (node == NULL || node->data.for_state.from == NULL ||
+      node->data.for_state.to == NULL || node->data.for_state.body == NULL ||
+      (node->data.for_state.guards == NULL &&
+       node->data.for_state.guard_count > 0)) {
+    return false;
+  }
+
+  char name_var[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
+  char name_step[NAME_BUF_SIZE];
+  if (!var_name(name_var, sizeof(name_var), node->data.for_state.var_name,
+                node->var_id)) {
+    return false;
+  }
+  if (!var_name(name_end, sizeof(name_end), "$for_end", node->var_id)) {
+    return false;
+  }
+  if (!var_name(name_step, sizeof(name_step), "$for_step", node->var_id)) {
+    return false;
+  }
+
+  char label_loop[NAME_BUF_SIZE];
+  char label_down[NAME_BUF_SIZE];
+  char label_body[NAME_BUF_SIZE];
+  char label_next[NAME_BUF_SIZE];
+  char label_end[NAME_BUF_SIZE];
+  int id = codegen_new_label_id();
+
+  if (!flow_label(label_loop, sizeof(label_loop), id, "for_loop")) {
+    return false;
+  }
+  if (!flow_label(label_down, sizeof(label_down), id, "for_down")) {
+    return false;
+  }
+  if (!flow_label(label_body, sizeof(label_body), id, "for_body")) {
+    return false;
+  }
+  if (!flow_label(label_next, sizeof(label_next), id, "for_next")) {
+    return false;
+  }
+  if (!flow_label(label_end, sizeof(label_end), id, "for_end")) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.for_state.from)) {
+    return false;
+  }
+  codegen_pops(name_var);
+
+  if (!gen_expr(node->data.for_state.to)) {
+    return false;
+  }
+  codegen_pops(name_end);
+
+  if (node->data.for_state.step != NULL) {
+    if (!gen_expr(node->data.for_state.step)) {
+      return false;
+    }
+  } else {
+    codegen_pushs("int@1");
+  }
+  codegen_pops(name_step);
+
+  if (node->data.for_state.step != NULL) {
+    codegen_jumpifneq(label_loop, name_step, "int@0");
+    codegen_exit("int@40");
+  }
+  codegen_label(label_loop);
+
+  codegen_pushs(name_step);
+  codegen_pushs("int@0");
+  codegen_lts();
+  codegen_pushs("bool@true");
+  codegen_jumpifeqs(label_down);
+
+  codegen_pushs(name_var);
+  codegen_pushs(name_end);
+  if (node->data.for_state.until) {
+    codegen_lts();
+    codegen_pushs("bool@false");
+  } else {
+    codegen_gts();
+    codegen_pushs("bool@true");
+  }
+  codegen_jumpifeqs(label_end);
+  codegen_jump(label_body);
+
+  codegen_label(label_down);
+  codegen_pushs(name_var);
+  codegen_pushs(name_end);
+  if (node->data.for_state.until) {
+    codegen_gts();
+    codegen_pushs("bool@false");
+  } else {
+    codegen_lts();
+    codegen_pushs("bool@true");
+  }
+  codegen_jumpifeqs(label_end);
+
+  codegen_label(label_body);
+
+  for (size_t i = 0; i < node->data.for_state.guard_count; i++) {
+    if (!gen_expr(node->data.for_state.guards[i])) {
+      return false;
+    }
+    codegen_pushs("bool@false");
+    codegen_jumpifeqs(label_next);
+  }
+
+  if (!gen_statement(node->data.for_state.body)) {
+    return false;
+  }
+
+  codegen_label(label_next);
+  codegen_pushs(name_var);
+  codegen_pushs(name_step);
+  codegen_adds();
+  codegen_pops(name_var);
+  codegen_jump(label_loop);
+  codegen_label(label_end);
+
+  return true;
+}
+
+/**
+ * @brief Generates a while loop.
+ *
+ * The condition is checked at the start of every iteration; the loop jumps
+ * to the end label when it is false.
+ *
+ * @param node AST_WHILE node.
+ * @return true on success, false on an invalid node.
+ */
+static bool gen_while(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+  char name_start[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
+  int id = codegen_new_label_id();
+
+  if (!flow_label(name_start, sizeof(name_start), id, "while")) {
+    return false;
+  }
+  if (!flow_label(name_end, sizeof(name_end), id, "while_end")) {
+    return false;
+  }
+
+  codegen_label(name_start);
+
+  if (!gen_expr(node->data.while_state.cond)) {
+    return false;
+  }
+  codegen_pushs("bool@false");
+  codegen_jumpifeqs(name_end);
+
+  if (!gen_statement(node->data.while_state.block)) {
+    return false;
+  }
+  codegen_jump(name_start);
+
+  codegen_label(name_end);
+
+  return true;
+}
+
+/**
+ * @brief Generates an if statement with an optional else branch.
+ *
+ * Without else, a false condition jumps straight to the end label. An
+ * else if is a nested AST_IF in the else branch.
+ *
+ * @param node AST_IF node.
+ * @return true on success, false on an invalid node.
+ */
+static bool gen_if(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  char name_else[NAME_BUF_SIZE];
+  char name_end[NAME_BUF_SIZE];
+  int id = codegen_new_label_id();
+
+  if (!flow_label(name_else, sizeof(name_else), id, "else")) {
+    return false;
+  }
+  if (!flow_label(name_end, sizeof(name_end), id, "if_end")) {
+    return false;
+  }
+
+  if (!gen_expr(node->data.if_state.cond)) {
+    return false;
+  }
+  codegen_pushs("bool@false");
+
+  if (node->data.if_state.else_block != NULL) {
+    codegen_jumpifeqs(name_else);
+  } else {
+    codegen_jumpifeqs(name_end);
+  }
+
+  if (!gen_statement(node->data.if_state.then_block)) {
+    return false;
+  }
+
+  if (node->data.if_state.else_block != NULL) {
+    codegen_jump(name_end);
+    codegen_label(name_else);
+    if (!gen_statement(node->data.if_state.else_block)) {
+      return false;
+    }
+  }
+
+  codegen_label(name_end);
+
+  return true;
+}
+
+bool gen_statement(const AstNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  switch (node->kind) {
+  case AST_ASSIGN:
+    return gen_assign(node);
+  case AST_WHILE:
+    return gen_while(node);
+  case AST_IF:
+    return gen_if(node);
+  case AST_BLOCK:
+    return gen_block(node);
+  case AST_VAL:
+  case AST_VAR:
+    return gen_var_decl(node);
+  case AST_RETURN:
+    return gen_return(node);
+  case AST_FOR:
+    return gen_for(node);
+  default:
+    if (is_expr_node(node)) {
+      if (!gen_expr(node)) {
+        return false;
+      }
+      codegen_pops("GF@$trash");
+      return true;
+    }
+    return false;
+  }
+}
+
+bool gen_program_start(const char *main_name) {
+  if (main_name == NULL) {
+    return false;
+  }
+
+  char label[NAME_BUF_SIZE];
+  if (!fn_label(label, sizeof(label), main_name)) {
+    return false;
+  }
+
+  codegen_header();
+  codegen_defvar("GF@$trash");
+  codegen_defvar("GF@$arg");
+  codegen_defvar("GF@$res");
+  codegen_defvar("GF@$concat_l");
+  codegen_defvar("GF@$concat_r");
+  codegen_call(label);
+  codegen_pops("GF@$trash");
+  codegen_exit("int@0");
+  return true;
+}
+
+void gen_program_end(void) {
+  builtin_substr_definition();
+  builtin_ord_definition();
+}
+
+bool gen_program(const AstNode *root) {
+  if (root == NULL || root->kind != AST_BLOCK) {
+    return false;
+  }
+
+  program_root = root;
+
+  const char *main_name = NULL;
+  for (size_t i = 0; i < root->data.block.count; i++) {
+    const AstNode *func = root->data.block.statements[i];
+    if (func == NULL || func->kind != AST_FUNC_DEF) {
+      return false;
+    }
+    if (func->data.func_def.is_main) {
+      main_name = func->data.func_def.name;
+    }
+  }
+  if (main_name == NULL) {
+    return false;
+  }
+
+  if (!gen_program_start(main_name)) {
+    return false;
+  }
+
+  for (size_t i = 0; i < root->data.block.count; i++) {
+    if (!gen_function(root->data.block.statements[i])) {
+      free(var_types);
+      var_types = NULL;
+      var_types_count = 0;
+      program_root = NULL;
+      return false;
+    }
+  }
+
+  gen_program_end();
+  free(var_types);
+  var_types = NULL;
+  var_types_count = 0;
+  program_root = NULL;
+  return true;
+}
