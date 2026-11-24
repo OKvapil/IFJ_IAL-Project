@@ -1,3 +1,12 @@
+/**
+ * @file hashtable.c
+ * @brief The implementation of the hash table.
+ * 
+ * IFJ/IAL project - IFJ26 compiler
+ *
+ * @author Jonáš Ľalík (xlalikj00)
+ */
+
 #include "hashtable.h"
 #include <stdlib.h>
 #include <string.h>
