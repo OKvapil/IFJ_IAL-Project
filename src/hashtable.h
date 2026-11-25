@@ -1,4 +1,14 @@
-#pragma once
+/**
+ * @file hashtable.h
+ * @brief The hash table header file.
+ * 
+ * IFJ/IAL project - IFJ26 compiler
+ *
+ * @author Jonáš Ľalík (xlalikj00)
+ */
+
+#ifndef HASHTABLE_H
+#define HASTABLE_H
 
 /**
  * @brief A structure storing one hash table entry.
@@ -65,3 +75,5 @@ Entry *ht_add(HashTable *hash_table, const char *key, void *data);
  * entries. If NULL, the data is not freed.
  */
 void ht_dispose(HashTable *hash_table, void (*free_data)(void *));
+
+#endif // HASHTABLE_H
