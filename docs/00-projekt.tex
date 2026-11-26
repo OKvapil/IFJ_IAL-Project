@@ -1,10 +1,16 @@
  \documentclass[]{ifjclass}
 \graphicspath{{pictures/}}
 
-\title{\logo\\Dokumentace projektu z předmětů IFJ a IAL\\\large Varianta -- \texttt{TRP-izp}\\\large Rozšíření: \texttt{BOOLTHEN}, \texttt{CONTROL}, \texttt{FUNEXP}}
+\title{
+    \logo\\[0.8cm]
+    Dokumentace projektu z předmětů IFJ a IAL\\[1cm]
+    \Large Varianta -- \texttt{TRP-izp}\\[0.25cm]
+    \large Rozšíření: \texttt{BOOLTHEN}, \texttt{CONTROL}, \texttt{FUNEXP}
+}
 
+\vspace{1cm}
 \author{\textbf{Ondřej Kvapil - xkvapio00} 25\,\% \\ Filip Haza - xhazafi00 25\,\% \\ Petr Nášel - xnaselp00 25\,\% \\ Jonáš Ľalík - xlalikj00 25\,\%}
-\date{\today}
+\date{\vspace{0.75cm}\today}
 
 \begin{document}
 	\maketitle
@@ -14,12 +20,25 @@
     \newpage
 
     \section{Rozdělení práce}
-
+        \begin{itemize}
+        \item Filip Haza -- Lexikální analýza, tokenizace, main.c a Makefile. Vizualizace diagramu konečného automatu do dokumentace
+        \item Petr Nášel -- Syntaktická analýza, precedenční analýza výrazů, abstraktní syntaktický strom. Vizualizace LL gramatiky, LL tabulky a precedenční tabulky do dokumentace.
+        \item Jonáš Ľalík -- Sémantická analýza, tabulka symbolů nad hashovací tabulkou a chybové kódy. Vizualizace architektury překladače do dokumentace.
+        \item Ondřej Kvapil -- Generátor cílového kódu, výpis instrukcí v IFJcode26, vestavěné funkce, main.c a Makefile
+        \item Všichni -- Testy vlastních částí a celého překladače, PR review a dokumentace
+        \end{itemize}
     \newpage
-    \section{Rozdělení práce, code review a testování}
+    \section{Spolupráce}
 
     \newpage
     \section{Architektura překladače}
+    \begin{figure}[htbp]
+        \centering
+        \includegraphics[width=\textwidth]{pictures/blokova_schema.png}
+        \caption{Blokové schéma architektury překladače}
+        \label{fig:architektura}
+    \end{figure}
+    \texttt{main} inicializuje scanner se zdrojovým programem. Scanner prochází zdrojovým programem a parser sestavuje AST pomocí tokenů ze scanneru. Při nalezení chyby v lexikální nebo syntaktické analýze je program ukončen s příslušnou chybou. Nad sestaveným AST proběhne sémantická analýza, která do něj zapisuje potřebné informace. Při nalezení chyby v sémantické analýze je do \texttt{main} vrácený typ chyby a program je ukončen. Nakonec generátor kódu, dle hotového AST, vygeneruje výsledný kód. Selhání generátoru kódu vrací \texttt{false} do \texttt{main} a program je ukončen.
 
     \newpage
     \section{Lexikální analyzátor}
