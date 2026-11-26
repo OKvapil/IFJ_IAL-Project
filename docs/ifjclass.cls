@@ -14,3 +14,4 @@
 \newcommand{\logo}{%
     \includegraphics[scale=0.1,keepaspectratio]{pictures/logo_cz.png}%
 }
+
